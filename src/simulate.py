@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+import matplotlib.pyplot as plt
 from alg import LinUCB
 
 ALG_DICT = {
@@ -41,6 +42,9 @@ class Scenario:
 class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
+    self.regrets = [0]
+    self.save_every = 5
+
 
   def train(self, alg, iters):
     for i in range(iters):
@@ -52,9 +56,7 @@ class Simulator:
 
 
   def test(self, alg, iters):
-    regrets = [0]
     accum_regret = 0
-    save_every = 5
 
     for i in range(iters):
       ctx = self.scenario.nextCtx()
@@ -63,10 +65,8 @@ class Simulator:
       alg.update(ctx, choice, reward)
 
       accum_regret += regret
-      if (i + 1) % save_every == 0:
-        regrets.append(accum_regret)
-
-    return regrets
+      if (i + 1) % self.save_every == 0:
+        self.regrets.append(accum_regret)
 
 
   def run(self, alg, train_iters, test_iters):
@@ -75,6 +75,19 @@ class Simulator:
 
     regrets = self.test(alg, test_iters)
     return regrets
+
+  def plot(self):
+    fig, ax = plt.subplots(1, sharex=True)
+
+    ax.legend(loc='upper left', prop={'size':9})
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Regret")
+    ax.set_title("Accumulated Regret")
+    ax.grid()
+
+    ax.plot(list(range(0, self.save_every * len(self.regrets), 5)), self.regrets, label='LinUCB')
+
+    plt.show()
 
 
 
@@ -95,8 +108,8 @@ def main():
   else:
     exit()
 
-  regrets = simulator.run(alg, args.train, args.test)
-  print(regrets)
+  simulator.run(alg, args.train, args.test)
+  simulator.plot()
 
 if __name__ == '__main__':
   main()
