@@ -43,7 +43,7 @@ class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
     self.regrets = [0]
-    self.save_every = 5
+    self.save_every = 500
 
 
   def train(self, alg, iters):
@@ -85,7 +85,7 @@ class Simulator:
     ax.set_title("Accumulated Regret")
     ax.grid()
 
-    ax.plot(list(range(0, self.save_every * len(self.regrets), 5)), self.regrets, label='LinUCB')
+    ax.plot(list(range(0, self.save_every * len(self.regrets), self.save_every)), self.regrets, label='LinUCB')
 
     plt.show()
 
