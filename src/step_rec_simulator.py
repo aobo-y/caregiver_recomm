@@ -7,26 +7,47 @@ import pdb
 import time
 import json
 import pymysql
+import numpy as np
 #import MySQLdb
 
-def recommend_suid(speaker_id, mood_id, scream, cry):
-    # using outputs form acoustics, return appropriate recommendation (survey)
+from alg import LinUCB
 
-    # basic dictionary for temporary testing {mood_id : recommended survey_id}
-    mood_2_rec = {
-        'H' : 19, # "HAPPY! Listen to some music you like.",
-        'A' : 19, # "ANGRY! Relax and grab a cup of tea :)",
-        'N' : 20, # "NEUTRAL! Do some yoga",
-        'S' : 21, # "SAD! Talk to your friend.",
-        # 'Sc' : 4, # "SCREAM! Calm down.",
-        # 'Cr' : 5  # "CRY! Stop crying and walk around."
-    }
-    survey_id = mood_2_rec[mood_id]
-    # For now, if screamed, add 5, and add 10 if cried
-    if scream:
-        survey_id = 19
-    if cry:
-        survey_id = 20
+ACTIONS = [19, 20, 21]
+
+lin_ucb = LinUCB(6, len(ACTIONS))
+
+def to_ctx_vector(mood_id, scream, cry):
+    moods = ['H', 'A', 'N', 'S']
+    return np.array([
+        *[int(mood_id == m) for m in moods],
+        int(scream),
+        int(cry)
+    ])
+
+def recommend_suid(speaker_id, mood_id, scream, cry, alg='LinUCB'):
+    # using outputs form acoustics, return appropriate recommendation (survey)
+    if alg == 'LinUCB':
+        ctx = to_ctx_vector(mood_id, scream, cry)
+        action_idx = lin_ucb.recommend(ctx)
+        survey_id = ACTIONS[action_idx]
+
+    else:
+        # basic dictionary for temporary testing {mood_id : recommended survey_id}
+        mood_2_rec = {
+            'H' : 19, # "HAPPY! Listen to some music you like.",
+            'A' : 19, # "ANGRY! Relax and grab a cup of tea :)",
+            'N' : 20, # "NEUTRAL! Do some yoga",
+            'S' : 21, # "SAD! Talk to your friend.",
+            # 'Sc' : 4, # "SCREAM! Calm down.",
+            # 'Cr' : 5  # "CRY! Stop crying and walk around."
+        }
+        survey_id = mood_2_rec[mood_id]
+        # For now, if screamed, add 5, and add 10 if cried
+        if scream:
+            survey_id = 19
+        if cry:
+            survey_id = 20
+
     return survey_id
 
 
@@ -72,17 +93,20 @@ if __name__ == '__main__':
     current_time = time.time()
     last_time = 0
     struc_current_tiem = time.localtime(current_time)
-    if current_time - last_time >= 300 and (struc_current_tiem[3]<22 and struc_current_tiem[3]>9):
+    if current_time - last_time >= 300 and (struc_current_tiem[3] < 22 and struc_current_tiem[3] > 9):
         last_time = current_time
         # based on recommended survey_id, form url to trigger phone buzz, using other parameters
         empathid = '999|15500047557'
         send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(22), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True)
+
         while time.time() - current_time < 300:
             query = "SELECT answer FROM ema_data where primkey = '999|15500047557' AND variablename = 'R000Q01'"
             data = cursor.execute(query)
+
             if data:
                 print('answer:', data)
-                if data == 2: send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(survey_id), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True)
+                if data == 2:
+                    send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(survey_id), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True)
                 break
     db.close()
 # Outputs from acoustic pipeline
