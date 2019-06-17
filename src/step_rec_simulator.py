@@ -5,6 +5,7 @@ import urllib
 import webbrowser
 import pdb
 import time
+import json
 import pymysql
 #import MySQLdb
 
@@ -35,14 +36,30 @@ def send_rec(phone_url, speaker_id, survey_id, server_url, androidid, empathid, 
     # http://191.168.0.106:2226/?q={"id":"2","c":"startsurvey","suid":16,"server":"http://191.168.0.107/ema/ema.php","androidid":"db7d3cdb88e1a62a","empathid":"999|1550004755","alarm":"true"}
     # http://191.168.0.106:2226/?q={"id":"2","c":"startsurvey","suid":16,"server":"http://191.168.0.107/ema/ema.php","androidid":"db7d3cdb88e1a62a","empathid":"999|1550004755","alarm":"True"}
     # pdb.set_trace()
-    url = phone_url + '/?q={%22id%22:%22'+speaker_id+'%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + survey_id + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + empathid + '%22,%22alarm%22:%22true%22}'
+    q_fields = {
+        'speaker_id': speaker_id,
+        'c': 'startsurvey',
+        'suid': survey_id,
+        'server': server_url,
+        'androidid': androidid,
+        'empathid': empathid,
+        'alarm': str(alarm).lower()
+    }
+
+    q_str = json.dumps(q_fields)
+    query_str = urllib.parse.urlencode({
+        'q': q_str
+    }, safe='}{/:')
+
+    url = phone_url + '/?' + query_str
+
     #"\",\"c\":\"startsurvey\",\"suid\":\"+ survey_id + \",\"server\":\"\"+server_url+\"\",\"androidid\":\""+androidid+"\",\"empathid\":\""+empathid+"\",\"alarm\":\""+str(alarm).lower()+"\"}'
     print("url: %s"%url)
     # urllib.urlopen(url)
     #url = 'www.google.com'
     webbrowser.open(url) # to open on browser
     # return
-    
+
 
 if __name__ == '__main__':
     # input to be changed: (phone_url, mood_id, speaker_id, server_url, androidid, empathid, alarm)
@@ -59,16 +76,16 @@ if __name__ == '__main__':
         last_time = current_time
         # based on recommended survey_id, form url to trigger phone buzz, using other parameters
         empathid = '999|15500047557'
-        send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(22), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True) 
+        send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(22), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True)
         while time.time() - current_time < 300:
             query = "SELECT answer FROM ema_data where primkey = '999|15500047557' AND variablename = 'R000Q01'"
             data = cursor.execute(query)
             if data:
                 print('answer:', data)
-                if data == 2: send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(survey_id), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True) 
+                if data == 2: send_rec(phone_url='http://191.168.0.106:2226', speaker_id='2', survey_id=str(survey_id), server_url='http://191.168.0.107/ema/ema.php', androidid='db7d3cdb88e1a62a', empathid=empathid, alarm=True)
                 break
     db.close()
-# Outputs from acoustic pipeline 
+# Outputs from acoustic pipeline
 # line 1: speaker ID. possible value: 0, 1, 2. 0 denotes speaker #1, 1 denotes speaker #2, 2 denotes un-identifiable speaker.
 # line 2: mood from the audio clip. possible value: H, A, N, S, standing for happy, angry, neutral, sad respectively.
 # line 3: scream. possible value: 0, 1. 0 represents that screaming is not detected. 1 represents screaming is detected.
