@@ -1,7 +1,7 @@
 import numpy as np
 
 class LinUCB:
-  def __init__(self, ctx_size, n_choices, lambda_=1, alpha=0.3):
+  def __init__(self, ctx_size, n_choices, lambda_= 1.3, alpha=0.2):
     self.ctx_size = ctx_size
     self.n_choices = n_choices
 
@@ -21,7 +21,7 @@ class LinUCB:
       AInv = np.linalg.inv(arm['A'])
       theta = AInv @ arm['b']
 
-      mean = np.dot(theta,  ctx)
+      mean = np.dot(theta, ctx)
       var = np.sqrt(ctx @ AInv @ ctx)
       pta = mean + self.alpha * var
 

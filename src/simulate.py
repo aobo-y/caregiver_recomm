@@ -12,11 +12,12 @@ class Scenario:
   Linear scenario
   '''
 
-  def __init__(self, ctx_size, n_choices, noise_scale=0.5):
+  def __init__(self, ctx_size, n_choices, noise_scale=0.4):
     self.ctx_size = ctx_size
     self.n_choices = n_choices
 
-    self.weight = np.random.normal(0, 1, (n_choices, ctx_size))
+    # self.weight = np.random.normal(0, 1, (n_choices, ctx_size))
+    self.weight = np.random.randn(n_choices, ctx_size)
     self.ctx = None
 
     self.noise = lambda: np.random.normal(scale=noise_scale)
@@ -25,6 +26,7 @@ class Scenario:
     ''' Update the ctx and return it '''
 
     self.ctx = np.random.normal(0, 1, self.ctx_size)
+    # self.ctx = np.random.randn(self.ctx_size)
     return self.ctx
 
   def reward(self, choice):
@@ -43,7 +45,7 @@ class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
     self.regrets = [0]
-    self.save_every = 500
+    self.save_every = 50
 
 
   def train(self, alg, iters):
