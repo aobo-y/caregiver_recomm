@@ -57,6 +57,7 @@ def send_rec(phone_url, speaker_id, survey_id, server_url, androidid, empathid, 
     # http://191.168.0.106:2226/?q={"id":"2","c":"startsurvey","suid":16,"server":"http://191.168.0.107/ema/ema.php","androidid":"db7d3cdb88e1a62a","empathid":"999|1550004755","alarm":"true"}
     # http://191.168.0.106:2226/?q={"id":"2","c":"startsurvey","suid":16,"server":"http://191.168.0.107/ema/ema.php","androidid":"db7d3cdb88e1a62a","empathid":"999|1550004755","alarm":"True"}
     # pdb.set_trace()
+    '''
     q_fields = {
         'speaker_id': speaker_id,
         'c': 'startsurvey',
@@ -73,8 +74,10 @@ def send_rec(phone_url, speaker_id, survey_id, server_url, androidid, empathid, 
     }, safe='}{/:')
 
     url = phone_url + '/?' + query_str
-
+    '''
     #"\",\"c\":\"startsurvey\",\"suid\":\"+ survey_id + \",\"server\":\"\"+server_url+\"\",\"androidid\":\""+androidid+"\",\"empathid\":\""+empathid+"\",\"alarm\":\""+str(alarm).lower()+"\"}'
+    url = phone_url + '/?q={%22id%22:%22'+speaker_id+'%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + survey_id + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + empathid + '%22,%22alarm%22:%22true%22}'
+
     print("url: %s"%url)
     # urllib.urlopen(url)
     #url = 'www.google.com'
