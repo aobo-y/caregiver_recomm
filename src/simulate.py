@@ -12,20 +12,34 @@ class Scenario:
   Linear scenario
   '''
 
-  def __init__(self, ctx_size, n_choices, noise_scale=0.4):
+  def __init__(self, ctx_size, n_choices, noise_scale=0.1):
     self.ctx_size = ctx_size
     self.n_choices = n_choices
 
-    # self.weight = np.random.normal(0, 1, (n_choices, ctx_size))
-    self.weight = np.random.randn(n_choices, ctx_size)
+    self.weight = np.concatenate([
+      np.random.randn(n_choices, ctx_size),
+      np.random.normal(-1.5, 1, (n_choices, n_choices))
+    ], axis=1)
+
     self.ctx = None
+
+    self.stats = np.array([0] * n_choices)
 
     self.noise = lambda: np.random.normal(scale=noise_scale)
 
+    self.c = 0
+
   def nextCtx(self):
     ''' Update the ctx and return it '''
+    if self.c % 5 == 0:
+      self.stats = np.array([0] * self.n_choices)
 
-    self.ctx = np.random.normal(0, 1, self.ctx_size)
+    self.ctx = np.concatenate([
+      np.random.normal(0, 1, self.ctx_size),
+      self.stats
+    ])
+
+    self.c += 1
     # self.ctx = np.random.randn(self.ctx_size)
     return self.ctx
 
@@ -37,8 +51,14 @@ class Scenario:
 
     truth = [v + self.noise() for v in self.weight @ self.ctx]
 
+    # append zero for no feedback
+    truth.append(0)
     opt_reward = max(truth)
-    reward = truth[choice]
+    if choice is not None:
+      reward = truth[choice]
+      self.stats[choice] += 1
+    else:
+      reward = 0
     return reward, opt_reward - reward
 
 class Simulator:
@@ -106,7 +126,7 @@ def main():
   simulator = Simulator(scenario)
 
   if args.alg in ALG_DICT:
-    alg = ALG_DICT[args.alg](args.ctx, args.actions)
+    alg = ALG_DICT[args.alg](args.ctx + args.actions, args.actions)
   else:
     exit()
 

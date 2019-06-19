@@ -28,9 +28,16 @@ class LinUCB:
       ptas.append(pta)
 
     choice = np.argmax(ptas)
+
+    if ptas[choice] < 0:
+      return None
+
     return choice
 
   def update(self, ctx, choice, reward):
+    if choice is None:
+      return
+
     arm = self.arms[choice]
     change = np.outer(ctx, ctx)
     arm['A'] += np.outer(ctx, ctx)
