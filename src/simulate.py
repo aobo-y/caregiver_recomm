@@ -119,7 +119,7 @@ class Simulator:
         self.regrets.append(accum_regret)
 
 
-  def run(self, alg, train_iters, test_iters):
+  def run(self, alg, test_iters, train_iters=0):
     if train_iters:
       self.train(alg, train_iters)
 
@@ -158,7 +158,7 @@ def main():
   else:
     exit()
 
-  simulator.run(alg, args.train, args.test)
+  simulator.run(alg, args.test, args.train)
   simulator.plot()
 
 if __name__ == '__main__':
