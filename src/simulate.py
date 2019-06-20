@@ -148,7 +148,7 @@ class Simulator:
     ax_a.set_title("Actions per Duration")
     ax_a.grid()
 
-    counts = [[] for _ in range(self.scenario.n_choices)]
+    counts = [[] for _ in range(self.scenario.n_choices + 1)]
     t, step = 0, 60
     for recomm in self.choice_history:
       choice, time = recomm
