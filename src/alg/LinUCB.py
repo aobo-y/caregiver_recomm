@@ -28,7 +28,8 @@ class LinUCB:
       ptas.append(pta)
 
     choice = np.argmax(ptas)
-
+    # if np.max(ptas) > 0:
+    #   print(ptas)
     if ptas[choice] < 0:
       return None
 
@@ -43,3 +44,6 @@ class LinUCB:
     arm['A'] += np.outer(ctx, ctx)
     arm['b'] += reward * ctx
 
+  @property
+  def weight(self):
+    pass

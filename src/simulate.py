@@ -1,5 +1,5 @@
 import argparse
-from collections import deque
+from collections import deque, defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 from alg import LinUCB
@@ -14,8 +14,8 @@ class Stats:
   '''
 
   def __init__(self, n_choices):
-    self.time_gap = lambda: np.random.poisson(10)
-    self.expire_after = 30
+    self.time_gap = lambda: np.random.poisson(5)
+    self.expire_after = 180
     self.history = deque()
 
     self.vct = np.array([0] * n_choices)
@@ -48,7 +48,7 @@ class Scenario:
 
     self.weight = np.concatenate([
       np.random.randn(n_choices, ctx_size),
-      np.random.normal(-1.5, 1, (n_choices, n_choices))
+      np.random.normal(-8, 1, (n_choices, n_choices))
     ], axis=1)
 
     self.ctx = None
@@ -89,12 +89,16 @@ class Scenario:
       reward = 0
     return reward, opt_reward - reward
 
+  @property
+  def time(self):
+    return self.stats.time
+
 class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
     self.regrets = [0]
     self.save_every = 50
-
+    self.choice_history = deque()
 
   def train(self, alg, iters):
     for i in range(iters):
@@ -114,6 +118,8 @@ class Simulator:
       reward, regret = self.scenario.insight(choice)
       alg.update(ctx, choice, reward)
 
+      self.choice_history.append((choice, self.scenario.time))
+
       accum_regret += regret
       if (i + 1) % self.save_every == 0:
         self.regrets.append(accum_regret)
@@ -127,15 +133,41 @@ class Simulator:
     return regrets
 
   def plot(self):
-    fig, ax = plt.subplots(1, sharex=True)
+    fig, (ax_r, ax_a) = plt.subplots(2, sharex=False)
 
-    ax.legend(loc='upper left', prop={'size':9})
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel("Regret")
-    ax.set_title("Accumulated Regret")
-    ax.grid()
+    ax_r.set_xlabel("Iteration")
+    ax_r.set_ylabel("Regret")
+    ax_r.set_title("Accumulated Regret")
+    ax_r.grid()
 
-    ax.plot(list(range(0, self.save_every * len(self.regrets), self.save_every)), self.regrets, label='LinUCB')
+    ax_r.plot(list(range(0, self.save_every * len(self.regrets), self.save_every)), self.regrets, label='LinUCB')
+    ax_r.legend(loc='upper left', prop={'size':9})
+
+    ax_a.set_xlabel('Time')
+    ax_a.set_ylabel('Count')
+    ax_a.set_title("Actions per Duration")
+    ax_a.grid()
+
+    counts = [[] for _ in range(self.scenario.n_choices)]
+    t, step = 0, 60
+    for recomm in self.choice_history:
+      choice, time = recomm
+      if time >= t:
+        for c_list in counts:
+          c_list.append(0)
+
+        t += step
+
+      if choice is None:
+        choice = -1
+
+      counts[choice][-1] += 1
+
+    for i, c_list in enumerate(counts):
+      label = f'Action {i}' if i != len(counts) - 1 else 'No Action'
+      ax_a.plot(list(range(step, t + 1, step)), c_list, label=label)
+
+    ax_a.legend()
 
     plt.show()
 
