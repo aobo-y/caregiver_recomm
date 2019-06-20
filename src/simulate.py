@@ -1,4 +1,5 @@
 import argparse
+from collections import deque
 import numpy as np
 import matplotlib.pyplot as plt
 from alg import LinUCB
@@ -6,6 +7,35 @@ from alg import LinUCB
 ALG_DICT = {
   'LinUCB': LinUCB
 }
+
+class Stats:
+  '''
+  Simulate time statistics
+  '''
+
+  def __init__(self, n_choices):
+    self.time_gap = lambda: np.random.poisson(10)
+    self.expire_after = 30
+    self.history = deque()
+
+    self.vct = np.array([0] * n_choices)
+    self.time = 0
+
+  def time_pass(self):
+    # random time pass
+    self.time += self.time_gap()
+    while self.history \
+      and self.history[0]['time'] + self.expire_after <= self.time:
+      recomm = self.history.popleft()
+      self.vct[recomm['action']] -= 1
+
+  def update(self, action):
+    self.history.append({
+      'action': action,
+      'time': self.time
+    })
+    self.vct[action] += 1
+
 
 class Scenario:
   '''
@@ -23,23 +53,21 @@ class Scenario:
 
     self.ctx = None
 
-    self.stats = np.array([0] * n_choices)
+    self.stats = Stats(n_choices)
 
     self.noise = lambda: np.random.normal(scale=noise_scale)
 
-    self.c = 0
 
   def nextCtx(self):
     ''' Update the ctx and return it '''
-    if self.c % 5 == 0:
-      self.stats = np.array([0] * self.n_choices)
+
+    self.stats.time_pass()
 
     self.ctx = np.concatenate([
       np.random.normal(0, 1, self.ctx_size),
-      self.stats
+      self.stats.vct
     ])
 
-    self.c += 1
     # self.ctx = np.random.randn(self.ctx_size)
     return self.ctx
 
@@ -56,7 +84,7 @@ class Scenario:
     opt_reward = max(truth)
     if choice is not None:
       reward = truth[choice]
-      self.stats[choice] += 1
+      self.stats.update(choice)
     else:
       reward = 0
     return reward, opt_reward - reward
