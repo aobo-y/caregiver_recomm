@@ -4,11 +4,7 @@ from collections import deque, defaultdict
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from alg import LinUCB
-
-ALG_DICT = {
-  'LinUCB': LinUCB
-}
+from alg import LinUCB, UniformRandom
 
 class Stats:
   '''
@@ -246,8 +242,10 @@ def main():
     scenario = Scenario(args.ctx, args.actions)
     simulator = Simulator(scenario)
 
-  if args.alg in ALG_DICT:
-    alg = ALG_DICT[args.alg](args.ctx + args.actions, args.actions)
+  if args.alg == 'LinUCB':
+    alg = LinUCB(args.ctx + args.actions, args.actions)
+  elif args.alg == 'UniformRandom':
+    alg = UniformRandom(args.actions)
   else:
     exit()
 
