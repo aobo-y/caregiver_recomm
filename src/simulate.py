@@ -19,6 +19,9 @@ class Stats:
     self.vct = np.array([0] * n_choices)
     self.time = 0
 
+    # init time for the first event
+    self.time_pass()
+
   def time_pass(self):
     # random time pass
     self.time += self.time_gap()
@@ -28,6 +31,9 @@ class Stats:
       self.vct[recomm['action']] -= 1
 
   def update(self, action):
+    if action is None:
+      return
+
     self.history.append({
       'action': action,
       'time': self.time
@@ -40,26 +46,39 @@ class Stats:
     self.history = deque()
 
 
+class UserProfile:
+  def __init__(self, ctx_size, n_choices):
+    self.weight = np.concatenate([
+      np.random.randn(n_choices, ctx_size),
+      np.random.normal(-4, .5, (n_choices, n_choices))
+    ], axis=1)
+
+    self.stats = Stats(n_choices)
+
+    self.choice_history = []
+
 class Scenario:
   '''
   Linear scenario
   '''
 
-  def __init__(self, ctx_size, n_choices, noise_scale=0.1):
+  def __init__(self, ctx_size, n_choices, n_users, noise_scale=0.1):
     self.ctx_size = ctx_size
     self.n_choices = n_choices
+    self.n_users = n_users
 
-    self.weight = np.concatenate([
+    self.global_weight = np.concatenate([
       np.random.randn(n_choices, ctx_size),
-      np.random.normal(-8, 1, (n_choices, n_choices))
+      np.random.normal(-5, 1, (n_choices, n_choices))
     ], axis=1)
+
+    self.user_profiles = [UserProfile(ctx_size, n_choices) for i in range(n_users)]
 
     self.ctx = None
 
-    self.stats = Stats(n_choices)
-
     self.noise_scale = noise_scale
     self.noise = lambda: np.random.normal(scale=noise_scale)
+
 
   @property
   def payload(self):
@@ -67,58 +86,98 @@ class Scenario:
       'ctx_size': self.ctx_size,
       'n_choices': self.n_choices,
       'noise_scale': self.noise_scale,
-      'weight': self.weight.tolist()
+      'global_weight': self.global_weight.tolist(),
+      'user_profiles': [u.weight for u in self.user_profiles]
     }
 
   @classmethod
   def load(cls, payload):
     scenario = cls(payload['ctx_size'], payload['n_choices'], payload['noise_scale'])
-    scenario.weight = np.array(payload['weight'])
+    scenario.global_weight = np.array(payload['global_weight'])
+    scenario.user_profiles = [UserProfile(payload['ctx_size'], payload['n_choices']) for _ in payload['user_profiles']]
+    for u, weight in zip(scenario.user_profiles, payload['user_profiles']):
+      u.weight = weight
+
     return scenario
 
-  def nextCtx(self):
-    ''' Update the ctx and return it '''
+  def next_event(self):
+    ''' Sample the next event and return it '''
 
-    self.stats.time_pass()
+    # choose the user with the earliest timestamp
+    user_idx = np.argmin([u.stats.time for u in self.user_profiles])
+    user = self.user_profiles[user_idx]
+    time = user.stats.time
 
-    self.ctx = np.concatenate([
+    ctx = np.concatenate([
       np.random.normal(0, 1, self.ctx_size),
-      self.stats.vct
+      user.stats.vct
     ])
 
-    # self.ctx = np.random.randn(self.ctx_size)
-    return self.ctx
+    session = ScenarioSession(self, user_idx, ctx, time)
+
+    return session
 
   def reward(self, choice):
-    return self.weight[choice] @ self.ctx + self.noise()
+    # return self.weight[choice] @ self.ctx + self.noise()
+    pass
 
-  def insight(self, choice):
+  def insight(self, user_idx, ctx, choice):
     ''' Return both the reward & regret '''
 
-    truth = [v + self.noise() for v in self.weight @ self.ctx]
+    user = self.user_profiles[user_idx]
+
+    truth = [v + self.noise() for v in (user.weight + self.global_weight) @ ctx]
 
     # append zero for no feedback
     truth.append(0)
     opt_reward = max(truth)
     if choice is not None:
       reward = truth[choice]
-      self.stats.update(choice)
     else:
       reward = 0
+
     return reward, opt_reward - reward
 
   def reset_stats(self):
-    self.stats.reset()
+    for u in user_profiles:
+      self.u.stats.reset()
+
+
+class ScenarioSession:
+  '''
+  Session of each scenario ctx event to be used in simulator
+  '''
+  def __init__(self, scenario, user_idx, ctx, time):
+    self.scenario = scenario
+    self.user_idx = user_idx
+    self.ctx = ctx
+    self.time = time
+
+    self.choice, self.reward, self.regret = None, None, None
 
   @property
-  def time(self):
-    return self.stats.time
+  def user(self):
+    return self.scenario.user_profiles[self.user_idx]
+
+  def recomm(self, choice):
+    ''' Recommend the choice & Return both the reward & regret '''
+
+    assert self.choice is None
+
+    self.choice = choice
+
+    self.reward, self.regret = self.scenario.insight(self.user_idx, self.ctx, choice)
+
+    self.user.stats.update(choice)
+    self.user.stats.time_pass()
+
+    return self.reward, self.regret
+
 
 class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
     self.regrets = [0]
-    self.save_every = 50
     self.choice_history = []
 
     self.training_data = None
@@ -134,16 +193,12 @@ class Simulator:
     accum_regret = 0
 
     for i in range(iters):
-      ctx = self.scenario.nextCtx()
-      choice = alg.recommend(ctx)
-      reward, regret = self.scenario.insight(choice)
-      alg.update(ctx, choice, reward)
+      session = self.scenario.next_event()
+      choice = alg.recommend(session.ctx)
+      reward, regret = session.recomm(choice)
+      alg.update(session.ctx, choice, reward)
 
-      accum_regret += regret
-      if (i + 1) % self.save_every == 0:
-        self.regrets.append(accum_regret)
-
-      self.choice_history.append([ctx, choice, reward, regret, self.scenario.time])
+      self.choice_history.append(session)
 
   def run(self, alg, test_iters, train_iters=0):
     if train_iters:
@@ -153,7 +208,9 @@ class Simulator:
     return regrets
 
   def save(self, path):
-    history = [r[:3] for r in self.choice_history if r[1] is not None
+    history = [
+      [s.user_idx, s.ctx, s.choice, s.reward, s.time]
+      for s in self.choice_history if s.choice is not None
     ]
     payload = {
       'scenario': self.scenario.payload,
@@ -190,7 +247,15 @@ class Simulator:
     ax_r.set_title("Accumulated Regret")
     ax_r.grid()
 
-    ax_r.plot(list(range(0, self.save_every * len(self.regrets), self.save_every)), self.regrets, label='LinUCB')
+    accum_every = 50
+    accum_regrets = [0]
+    regret_sum = 0
+    for i, session in enumerate(self.choice_history):
+      regret_sum += session.regret
+      if (i + 1) % accum_every == 0:
+        accum_regrets.append(regret_sum)
+
+    ax_r.plot(list(range(0, len(self.choice_history) + 1, accum_every)), accum_regrets, label='LinUCB')
     ax_r.legend(loc='upper left', prop={'size':9})
 
     ax_a.set_xlabel('Time')
@@ -200,16 +265,14 @@ class Simulator:
 
     counts = [[] for _ in range(self.scenario.n_choices + 1)]
     t, step = 0, 60
-    for recomm in self.choice_history:
-      _, choice, _, _, time = recomm
-      if time >= t:
+    for session in self.choice_history:
+      if session.time >= t:
         for c_list in counts:
           c_list.append(0)
 
         t += step
 
-      if choice is None:
-        choice = -1
+      choice = -1 if session.choice is None else session.choice
 
       counts[choice][-1] += 1
 
@@ -232,6 +295,7 @@ def main():
   parser.add_argument('--ctx', type=int, default=10, help='context vector size')
   parser.add_argument('--train', type=int, default=0, help='number of training iterations')
   parser.add_argument('--test', type=int, default=100, help='number of testing iterations')
+  parser.add_argument('--users', type=int, default=1, help='number of users')
   parser.add_argument('--save', help='path to save the scenario')
   parser.add_argument('--load', help='path to save the scenario')
   args = parser.parse_args()
@@ -239,7 +303,7 @@ def main():
   if args.load:
     simulator = Simulator.load(args.load)
   else:
-    scenario = Scenario(args.ctx, args.actions)
+    scenario = Scenario(args.ctx, args.actions, args.users)
     simulator = Simulator(scenario)
 
   if args.alg == 'LinUCB':
