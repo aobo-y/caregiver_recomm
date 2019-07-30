@@ -4,7 +4,7 @@ from collections import deque, defaultdict
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from alg import LinUCB, UniformRandom
+from alg import LinUCB, MultiLinUCB, UniformRandom
 
 class Stats:
   '''
@@ -174,6 +174,27 @@ class ScenarioSession:
     return self.reward, self.regret
 
 
+
+class DefaultAlgAdapter:
+  def __init__(self, alg):
+    self.alg = alg
+
+  def act(self, session):
+    return self.alg.recommend(session.ctx)
+
+  def update(self, session):
+    return self.alg.update(session.ctx, session.choice, session.reward)
+
+class MultiUserAlgAdapter:
+  def __init__(self, alg):
+    self.alg = alg
+
+  def act(self, session):
+    return self.alg.recommend(session.user_idx, session.ctx)
+
+  def update(self, session):
+    return self.alg.update(session.user_idx, session.ctx, session.choice, session.reward)
+
 class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
@@ -182,29 +203,36 @@ class Simulator:
 
     self.training_data = None
 
-  def train(self, alg, iters):
+  def init(self, alg, type=None):
+    if type == 'multi':
+      self.alg = MultiUserAlgAdapter(alg)
+    else:
+      self.alg = DefaultAlgAdapter(alg)
+
+  def train(self, iters):
     assert iters <= len(self.training_data)
 
     data = self.training_data[:iters]
     for ctx, choice, reward in data:
-      alg.update(np.array(ctx), choice, reward)
+      # TODO fix here
+      self.alg.update(np.array(ctx), choice, reward)
 
-  def test(self, alg, iters):
+  def test(self, iters):
     accum_regret = 0
 
     for i in range(iters):
       session = self.scenario.next_event()
-      choice = alg.recommend(session.ctx)
+      choice = self.alg.act(session)
       reward, regret = session.recomm(choice)
-      alg.update(session.ctx, choice, reward)
+      self.alg.update(session)
 
       self.choice_history.append(session)
 
-  def run(self, alg, test_iters, train_iters=0):
+  def run(self, test_iters, train_iters=0):
     if train_iters:
-      self.train(alg, train_iters)
+      self.train(train_iters)
 
-    regrets = self.test(alg, test_iters)
+    regrets = self.test(test_iters)
     return regrets
 
   def save(self, path):
@@ -306,14 +334,19 @@ def main():
     scenario = Scenario(args.ctx, args.actions, args.users)
     simulator = Simulator(scenario)
 
+  alg_type = None
   if args.alg == 'LinUCB':
     alg = LinUCB(args.ctx + args.actions, args.actions)
+  elif args.alg == 'MultiLinUCB':
+    alg = MultiLinUCB(args.ctx + args.actions, args.actions, args.users)
+    alg_type = 'multi'
   elif args.alg == 'UniformRandom':
     alg = UniformRandom(args.actions)
   else:
     exit()
 
-  simulator.run(alg, args.test, args.train)
+  simulator.init(alg, type=alg_type)
+  simulator.run(args.test, args.train)
 
   if args.save:
     simulator.save(args.save)
