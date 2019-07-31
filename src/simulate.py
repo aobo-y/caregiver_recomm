@@ -267,13 +267,11 @@ class Simulator:
 
     return instance
 
-  def plot(self):
-    fig, (ax_r, ax_a) = plt.subplots(2, sharex=False)
-
-    ax_r.set_xlabel("Iteration")
-    ax_r.set_ylabel("Regret")
-    ax_r.set_title("Accumulated Regret")
-    ax_r.grid()
+  def regret_plot(self, subplot):
+    subplot.set_xlabel("Iteration")
+    subplot.set_ylabel("Regret")
+    subplot.set_title("Accumulated Regret")
+    subplot.grid()
 
     accum_every = 50
     accum_regrets = [0]
@@ -283,13 +281,39 @@ class Simulator:
       if (i + 1) % accum_every == 0:
         accum_regrets.append(regret_sum)
 
-    ax_r.plot(list(range(0, len(self.choice_history) + 1, accum_every)), accum_regrets, label='LinUCB')
-    ax_r.legend(loc='upper left', prop={'size':9})
+    subplot.plot(list(range(0, len(self.choice_history) + 1, accum_every)), accum_regrets, label='LinUCB')
+    subplot.legend(loc='upper left', prop={'size':9})
 
-    ax_a.set_xlabel('Time')
-    ax_a.set_ylabel('Count')
-    ax_a.set_title("Actions per Duration")
-    ax_a.grid()
+  def regret_per_user_plot(self, subplot):
+    subplot.set_xlabel("Iteration")
+    subplot.set_ylabel("Regret")
+    subplot.set_title("Accumulated Regret")
+    subplot.grid()
+
+    accum_every = 50
+
+    user_history_grp = defaultdict(list)
+    for session in self.choice_history:
+      user_history_grp[session.user_idx].append(session)
+
+    # sort to ensure the user indice order
+    user_history_grp = sorted(user_history_grp.items(), key=lambda t: t[0])
+    for user_idx, user_history in user_history_grp:
+      accum_regrets = [0]
+      regret_sum = 0
+      for i, session in enumerate(user_history):
+        regret_sum += session.regret
+        if (i + 1) % accum_every == 0:
+          accum_regrets.append(regret_sum)
+
+      subplot.plot(list(range(0, len(user_history) + 1, accum_every)), accum_regrets, label=f'User {user_idx}')
+    subplot.legend(loc='upper left', prop={'size':9})
+
+  def action_plot(self, subplot):
+    subplot.set_xlabel('Time')
+    subplot.set_ylabel('Count')
+    subplot.set_title("Actions per Duration")
+    subplot.grid()
 
     counts = [[] for _ in range(self.scenario.n_choices + 1)]
     t, step = 0, 60
@@ -308,9 +332,16 @@ class Simulator:
       label = f'Action {i}' if i != len(counts) - 1 else 'No Action'
       # ax_a.plot(list(range(step, t + 1, step)), c_list, label=label)
       btm = [sum(vals[i + 1:]) for vals in zip(*counts)]
-      ax_a.bar(list(range(step, t + 1, step)), c_list, bottom=btm, width=30, label=label)
+      subplot.bar(list(range(step, t + 1, step)), c_list, bottom=btm, width=30, label=label)
 
-    ax_a.legend()
+    subplot.legend()
+
+  def plot(self):
+    fig, (ax_1, ax_2) = plt.subplots(2, sharex=False)
+
+    self.regret_plot(ax_1)
+    self.regret_per_user_plot(ax_2)
+    # self.action_plot(ax_2)
 
     plt.show()
 
