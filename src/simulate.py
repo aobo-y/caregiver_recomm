@@ -92,7 +92,7 @@ class Scenario:
 
   @classmethod
   def load(cls, payload):
-    scenario = cls(payload['ctx_size'], payload['n_choices'], payload['noise_scale'])
+    scenario = cls(payload['ctx_size'], payload['n_choices'], len(payload['task_profiles']), payload['noise_scale'])
     scenario.global_weight = np.array(payload['global_weight'])
     scenario.task_profiles = [TaskProfile(payload['ctx_size'], payload['n_choices']) for _ in payload['task_profiles']]
     for u, weight in zip(scenario.task_profiles, payload['task_profiles']):
@@ -388,8 +388,8 @@ def main():
     alg_args = (args.ctx + args.actions, args.actions, args.tasks)
     alg_type = 'multi'
   elif args.alg == 'UniformRandom':
-    alg = UniformRandom
-    alg_args = (args.actions)
+    alg_cls = UniformRandom
+    alg_args = (args.actions, )
   else:
     exit()
 
