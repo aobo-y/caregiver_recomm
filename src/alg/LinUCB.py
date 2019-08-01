@@ -14,7 +14,7 @@ class LinUCB:
       } for i in range(n_choices)
     ]
 
-  def recommend(self, ctx):
+  def act(self, ctx):
     ptas = []
 
     for arm in self.arms:

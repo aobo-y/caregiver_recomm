@@ -29,9 +29,9 @@ class MultiLinUCB(LinUCB):
 
     return new_ctx
 
-  def recommend(self, user, ctx):
+  def act(self, user, ctx):
     new_ctx = self.cvt_ctx(user, ctx)
-    choice = super().recommend(new_ctx)
+    choice = super().act(new_ctx)
     return choice
 
   def update(self, user, ctx, choice, reward):

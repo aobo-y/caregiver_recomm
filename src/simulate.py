@@ -175,22 +175,36 @@ class ScenarioSession:
 
 
 
-class DefaultAlgAdapter:
-  def __init__(self, alg):
-    self.alg = alg
+class IgnoreTaskAlgAdapter:
+  def __init__(self, alg_cls, alg_args=(), alg_kargs={}):
+    self.alg = alg_cls(*alg_args, **alg_kargs)
 
   def act(self, session):
-    return self.alg.recommend(session.ctx)
+    return self.alg.act(session.ctx)
 
   def update(self, session):
     return self.alg.update(session.ctx, session.choice, session.reward)
 
-class MultiUserAlgAdapter:
-  def __init__(self, alg):
-    self.alg = alg
+class SingleTaskAlgAdapter:
+  ''' Adaptor for SingleTask Algorithm '''
+
+  def __init__(self, alg_cls, alg_args=(), alg_kargs={}, n_tasks=1):
+    self.algs = [alg_cls(*alg_args, **alg_kargs) for _ in range(n_tasks)]
 
   def act(self, session):
-    return self.alg.recommend(session.user_idx, session.ctx)
+    return self.algs[session.user_idx].act(session.ctx)
+
+  def update(self, session):
+    return self.algs[session.user_idx].update(session.ctx, session.choice, session.reward)
+
+class MultiTaskAlgAdapter:
+  ''' Adaptor for MultiTask Algorithm '''
+
+  def __init__(self, alg_cls, alg_args=(), alg_kargs={}):
+    self.alg = alg_cls(*alg_args, **alg_kargs)
+
+  def act(self, session):
+    return self.alg.act(session.user_idx, session.ctx)
 
   def update(self, session):
     return self.alg.update(session.user_idx, session.ctx, session.choice, session.reward)
@@ -203,11 +217,11 @@ class Simulator:
 
     self.training_data = None
 
-  def init(self, alg, type=None):
-    if type == 'multi':
-      self.alg = MultiUserAlgAdapter(alg)
+  def init(self, alg_cls, alg_type='single', alg_args=()):
+    if alg_type == 'multi':
+      self.alg = MultiTaskAlgAdapter(alg_cls, alg_args)
     else:
-      self.alg = DefaultAlgAdapter(alg)
+      self.alg = SingleTaskAlgAdapter(alg_cls, alg_args, n_tasks=self.scenario.n_users)
 
   def train(self, iters):
     assert iters <= len(self.training_data)
@@ -282,12 +296,12 @@ class Simulator:
         accum_regrets.append(regret_sum)
 
     subplot.plot(list(range(0, len(self.choice_history) + 1, accum_every)), accum_regrets, label='LinUCB')
-    subplot.legend(loc='upper left', prop={'size':9})
+    subplot.legend(loc='lower right', prop={'size':9})
 
   def regret_per_user_plot(self, subplot):
     subplot.set_xlabel("Iteration")
     subplot.set_ylabel("Regret")
-    subplot.set_title("Accumulated Regret")
+    subplot.set_title("Accumulated Regret per Task")
     subplot.grid()
 
     accum_every = 50
@@ -306,8 +320,8 @@ class Simulator:
         if (i + 1) % accum_every == 0:
           accum_regrets.append(regret_sum)
 
-      subplot.plot(list(range(0, len(user_history) + 1, accum_every)), accum_regrets, label=f'User {user_idx}')
-    subplot.legend(loc='upper left', prop={'size':9})
+      subplot.plot(list(range(0, len(user_history) + 1, accum_every)), accum_regrets, label=f'Task {user_idx}')
+    subplot.legend(loc='lower right', prop={'size':9})
 
   def action_plot(self, subplot):
     subplot.set_xlabel('Time')
@@ -365,18 +379,21 @@ def main():
     scenario = Scenario(args.ctx, args.actions, args.users)
     simulator = Simulator(scenario)
 
-  alg_type = None
+  alg_type = 'single'
   if args.alg == 'LinUCB':
-    alg = LinUCB(args.ctx + args.actions, args.actions)
+    alg_cls = LinUCB
+    alg_args = (args.ctx + args.actions, args.actions)
   elif args.alg == 'MultiLinUCB':
-    alg = MultiLinUCB(args.ctx + args.actions, args.actions, args.users)
+    alg_cls = MultiLinUCB
+    alg_args = (args.ctx + args.actions, args.actions, args.users)
     alg_type = 'multi'
   elif args.alg == 'UniformRandom':
-    alg = UniformRandom(args.actions)
+    alg = UniformRandom
+    alg_args = (args.actions)
   else:
     exit()
 
-  simulator.init(alg, type=alg_type)
+  simulator.init(alg_cls, alg_type=alg_type, alg_args=alg_args)
   simulator.run(args.test, args.train)
 
   if args.save:
