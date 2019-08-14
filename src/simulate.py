@@ -41,7 +41,7 @@ class Stats:
     self.vct[action] += 1
 
   def reset(self):
-    self.time = 0
+    self.time = self.time_gap()
     self.vct.fill(0)
     self.history = deque()
 
@@ -79,6 +79,8 @@ class Scenario:
     self.noise_scale = noise_scale
     self.noise = lambda: np.random.normal(scale=noise_scale)
 
+    self.active_n_tasks = n_tasks
+
 
   @property
   def payload(self):
@@ -104,7 +106,7 @@ class Scenario:
     ''' Sample the next event and return it '''
 
     # choose the task with the earliest timestamp
-    task_idx = np.argmin([u.stats.time for u in self.task_profiles])
+    task_idx = np.argmin([u.stats.time for u in self.task_profiles[:self.active_n_tasks]])
     task = self.task_profiles[task_idx]
     time = task.stats.time
 
@@ -139,8 +141,8 @@ class Scenario:
     return reward, opt_reward - reward
 
   def reset_stats(self):
-    for u in task_profiles:
-      self.u.stats.reset()
+    for u in self.task_profiles:
+      u.stats.reset()
 
 
 class ScenarioSession:
@@ -212,7 +214,6 @@ class MultiTaskAlgAdapter:
 class Simulator:
   def __init__(self, scenario):
     self.scenario = scenario
-    self.regrets = [0]
     self.choice_history = []
 
     self.training_data = None
@@ -223,6 +224,8 @@ class Simulator:
     else:
       self.alg = SingleTaskAlgAdapter(alg_cls, alg_args, n_tasks=self.scenario.n_tasks)
 
+    self.choice_history = []
+
   def train(self, iters):
     assert iters <= len(self.training_data)
 
@@ -232,8 +235,6 @@ class Simulator:
       self.alg.update(np.array(ctx), choice, reward)
 
   def test(self, iters):
-    accum_regret = 0
-
     for i in range(iters):
       session = self.scenario.next_event()
       choice = self.alg.act(session)
