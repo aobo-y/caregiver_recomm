@@ -4,7 +4,7 @@ from collections import deque, defaultdict
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from alg import LinUCB, MultiLinUCB, UniformRandom
+from alg import LinUCB, LinPHE, MultiLinUCB, UniformRandom
 
 class Stats:
   '''
@@ -383,6 +383,9 @@ def main():
   alg_type = 'single'
   if args.alg == 'LinUCB':
     alg_cls = LinUCB
+    alg_args = (args.ctx + args.actions, args.actions)
+  elif args.alg == 'LinPHE':
+    alg_cls = LinPHE
     alg_args = (args.ctx + args.actions, args.actions)
   elif args.alg == 'MultiLinUCB':
     alg_cls = MultiLinUCB
