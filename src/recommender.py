@@ -13,7 +13,7 @@ class Recommender:
     self.stats = Stats(len(ACTIONS), expire_after=1800)
 
     # temp mock revward
-    self.mock_scenario = Scenario(ctx_size, len(ACTIONS))
+    self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
 
   def dispatch(self, speaker_id, evt):
@@ -27,7 +27,7 @@ class Recommender:
     self.stats.refresh_vct()
     ctx = np.concatenate([evt, self.stats.vct])
 
-    action_idx = model.act(ctx)
+    action_idx = self.model.act(ctx)
 
     if action_idx is None:
       print('No action')
@@ -38,15 +38,15 @@ class Recommender:
 
     # if send recommendation successfully
     if not err:
-      reward = get_reward()
-      model.update(ctx, action_idx, reward)
+      reward = self.get_reward(ctx, action_idx)
+      self.model.update(ctx, action_idx, reward)
 
   def get_reward(self, ctx, action_idx):
     '''
     temp mocked reward
     '''
 
-    reward, _ = self.mock_scenario.insight(1, ctx, action_idx)
+    reward, _ = self.mock_scenario.insight(0, ctx, action_idx)
 
     return reward
 

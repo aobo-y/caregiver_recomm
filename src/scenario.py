@@ -20,7 +20,7 @@ class TaskProfile:
     self.choice_history = []
 
   def time_pass(self):
-    self.time = self.time + timedelta(second=self.time_gap())
+    self.time = self.time + timedelta(seconds=self.time_gap())
 
 class Scenario:
   '''
