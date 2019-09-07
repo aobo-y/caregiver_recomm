@@ -1,3 +1,4 @@
+from threading import Thread
 import numpy as np
 from .alg import LinUCB
 from .scenario import Scenario
@@ -20,7 +21,8 @@ class Recommender:
     if not isinstance(evt, np.ndarray):
       evt = np.array(evt)
 
-    self._process_evt(speaker_id, evt)
+    thread = Thread(target=self._process_evt, args=(speaker_id, evt))
+    thread.start()
 
 
   def _process_evt(self, speaker_id, evt):
