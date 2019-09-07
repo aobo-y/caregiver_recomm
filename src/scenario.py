@@ -1,45 +1,8 @@
 from collections import deque
+from datetime import datetime, timedelta
 import numpy as np
 
-class Stats:
-  '''
-  Simulate time statistics
-  '''
-
-  def __init__(self, n_choices):
-    self.time_gap = lambda: np.random.poisson(10)
-    self.expire_after = 180
-    self.history = deque()
-
-    self.vct = np.array([0] * n_choices)
-    self.time = 0
-
-    # init time for the first event
-    self.time_pass()
-
-  def time_pass(self):
-    # random time pass
-    self.time += self.time_gap()
-    while self.history \
-      and self.history[0]['time'] + self.expire_after <= self.time:
-      recomm = self.history.popleft()
-      self.vct[recomm['action']] -= 1
-
-  def update(self, action):
-    if action is None:
-      return
-
-    self.history.append({
-      'action': action,
-      'time': self.time
-    })
-    self.vct[action] += 1
-
-  def reset(self):
-    self.time = self.time_gap()
-    self.vct.fill(0)
-    self.history = deque()
-
+from .stats import Stats
 
 class TaskProfile:
   def __init__(self, ctx_size, n_choices):
@@ -48,9 +11,16 @@ class TaskProfile:
       np.random.normal(-4, .5, (n_choices, n_choices))
     ], axis=1)
 
+    self.time_gap = lambda: np.random.poisson(10)
+    self.time = datetime.now()
+    self.time_pass()
+
     self.stats = Stats(n_choices)
 
     self.choice_history = []
+
+  def time_pass(self):
+    self.time = self.time + timedelta(second=self.time_gap())
 
 class Scenario:
   '''
@@ -101,16 +71,16 @@ class Scenario:
     ''' Sample the next event and return it '''
 
     # choose the task with the earliest timestamp
-    task_idx = np.argmin([u.stats.time for u in self.task_profiles[:self.active_n_tasks]])
+    task_idx = np.argmin([u.time for u in self.task_profiles[:self.active_n_tasks]])
     task = self.task_profiles[task_idx]
-    time = task.stats.time
+    task.stats.refresh_vct(time=task.time)
 
     ctx = np.concatenate([
       np.random.normal(0, 1, self.ctx_size),
       task.stats.vct
     ])
 
-    session = ScenarioSession(self, task_idx, ctx, time)
+    session = ScenarioSession(self, task_idx, ctx, task.time)
 
     return session
 
@@ -165,8 +135,8 @@ class ScenarioSession:
 
     self.reward, self.regret = self.scenario.insight(self.task_idx, self.ctx, choice)
 
-    self.task.stats.update(choice)
-    self.task.stats.time_pass()
+    self.task.stats.update(choice, time=self.task.time)
+    self.task.time_pass()
 
     return self.reward, self.regret
 
