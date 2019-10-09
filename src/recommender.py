@@ -70,7 +70,7 @@ class Recommender:
       var_name_code = str(action_idx+1)
 
     # recieving reward from user
-    while time.time() - current_time < 30:
+    while time.time() - current_time < 300:
       # print(str(empathid))
       query = "SELECT answer FROM ema_data where primkey = '1:" + empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
