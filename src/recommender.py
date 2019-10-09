@@ -94,7 +94,6 @@ class Recommender:
 
     if time_count == 0:
       err = "Timeout Error"
-    print(reward)
 
     # close database
     db.close()
@@ -147,14 +146,13 @@ class Recommender:
         url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + '22' + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + pre_empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
         webbrowser.open(url)  # to open on browser
         #print(empathid)
-        while time.time() - current_time < 30:
+        while time.time() - current_time < 300:
             #print(str(empathid))
             query = "SELECT answer FROM ema_data where primkey = '1:" + pre_empathid + "' AND variablename = 'R000Q01'"
             data = cursor.execute(query)
             if data:
                 answer = str(cursor.fetchall()).split("'")[1]
-                print('answer:',answer)
-
+                
                 # if answer is yes '1' stop
                 if answer =='1':
                   break
