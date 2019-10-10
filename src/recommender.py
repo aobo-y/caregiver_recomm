@@ -7,7 +7,10 @@ from .stats import Stats
 import pymysql
 import time
 import webbrowser
-import urllib
+import urllib.request
+import http
+#import urllib2
+
 
 ACTIONS = [0, 1, 2]
 
@@ -71,7 +74,6 @@ class Recommender:
 
     # recieving reward from user
     while time.time() - current_time < 300:
-      # print(str(empathid))
       query = "SELECT answer FROM ema_data where primkey = '1:" + empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
 
@@ -79,7 +81,6 @@ class Recommender:
       if data:
         # empathid = '999|' + str(int(time.time()))
         answer = str(cursor.fetchall()).split("'")[1]
-        # print('answer:', answer)
 
         # if NO return 1
         if answer == '2':
@@ -144,15 +145,19 @@ class Recommender:
       try:
         #send prequestion 22
         url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + '22' + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + pre_empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
-        webbrowser.open(url)  # to open on browser
-        #print(empathid)
+        #webbrowser.open(url)  # to open on browser
+
+        try:
+          send = urllib.request.urlopen(url)
+        except http.client.BadStatusLine:
+          pass
+
         while time.time() - current_time < 300:
-            #print(str(empathid))
             query = "SELECT answer FROM ema_data where primkey = '1:" + pre_empathid + "' AND variablename = 'R000Q01'"
             data = cursor.execute(query)
             if data:
                 answer = str(cursor.fetchall()).split("'")[1]
-                
+
                 # if answer is yes '1' stop
                 if answer =='1':
                   break
@@ -160,14 +165,17 @@ class Recommender:
                 if answer == '2':
                   empathid = '999|' + str(int(time.time()))
                   url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + survey_id[action] + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
-                  webbrowser.open(url)
+                  #webbrowser.open(url)
+                  try:
+                    send = urllib.request.urlopen(url)
+                  except http.client.BadStatusLine:
+                    pass
                 break
         # "\",\"c\":\"startsurvey\",\"suid\":\"+ survey_id + \",\"server\":\"\"+server_url+\"\",\"androidid\":\""+androidid+"\",\"empathid\":\""+empathid+"\",\"alarm\":\""+str(alarm).lower()+"\"}'
         # url = phone_url + '/?q={%22id%22:%22' + speaker_id + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + survey_id + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + empathid + '%22,%22alarm%22:%22true%22}'
       except webbrowser.Error:
         err = "Webbrowser Error"
-        # this error will be raised when there is an error in the webbrowser interface
+
 
     db.close()
-
     return empathid, err
