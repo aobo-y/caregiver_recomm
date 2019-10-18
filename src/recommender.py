@@ -18,13 +18,14 @@ ACTIONS = [0, 1, 2]
 
 
 class Recommender:
-  def __init__(self, evt_dim=4):
+  def __init__(self, evt_dim=4, mock=False):
     ctx_size = evt_dim + len(ACTIONS)
     self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
     self.stats = Stats(len(ACTIONS), expire_after=1800)
 
-    # temp mock revward
-    self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
+    self.mock = mock
+    if self.mock:
+      self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
   def log(self, *args):
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -76,6 +77,9 @@ class Recommender:
     '''
     temp mocked reward
     '''
+    if self.mock:
+      return None, self.mock_scenario.insight(0, ctx, action_idx)[0]
+
     # connect to database
     db = pymysql.connect('localhost', 'root', '', 'ema')
     cursor = db.cursor()
@@ -130,6 +134,9 @@ class Recommender:
     Send the chosen action to the downstream
     return err if any
     '''
+
+    if self.mock:
+      return None, 'mock_id'
 
     err = None
     empathid = None

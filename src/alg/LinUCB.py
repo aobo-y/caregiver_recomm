@@ -1,7 +1,7 @@
 import numpy as np
 
 class LinUCB:
-  def __init__(self, ctx_size, n_choices, lambda_= 1.3, alpha=0.2):
+  def __init__(self, ctx_size, n_choices, lambda_=1.3, alpha=2.5):
     self.ctx_size = ctx_size
     self.n_choices = n_choices
 
