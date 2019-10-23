@@ -155,6 +155,11 @@ class Recommender:
         while time.time() - current_time < 300:
             query = "SELECT answer FROM ema_data where primkey = '1:" + pre_empathid + "' AND variablename = 'R000Q01'"
             data = cursor.execute(query)
+            
+            # #insert time id
+            #insert_query = "INSERT INTO ema_data (primkey) VALUES " + pre_empathid
+            # cursor.execute(insert_query);
+            # connection.commit();
             if data:
                 answer = str(cursor.fetchall()).split("'")[1]
 
