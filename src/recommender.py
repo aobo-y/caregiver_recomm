@@ -1,28 +1,35 @@
+import threading
 from threading import Thread
-import numpy as np
-from .alg import LinUCB
-from .scenario import Scenario
-from .stats import Stats
-
-import pymysql
 import time
+from datetime import datetime
 import webbrowser
 import urllib.request
 import http
-#import urllib2
+
+import numpy as np
+import pymysql
+
+from .alg import LinUCB
+from .scenario import Scenario
+from .stats import Stats
 
 
 ACTIONS = [0, 1, 2]
 
 
 class Recommender:
-  def __init__(self, evt_dim=4):
+  def __init__(self, evt_dim=4, mock=False):
     ctx_size = evt_dim + len(ACTIONS)
-    self.model = LinUCB(ctx_size, len(ACTIONS))
+    self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
     self.stats = Stats(len(ACTIONS), expire_after=1800)
 
-    # temp mock revward
-    self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
+    self.mock = mock
+    if self.mock:
+      self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
+
+  def log(self, *args):
+    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print('[RECOMM]', f'{time}    ', *args)
 
   def dispatch(self, speaker_id, evt):
     if not isinstance(evt, np.ndarray):
@@ -31,6 +38,8 @@ class Recommender:
     thread = Thread(target=self._process_evt, args=(speaker_id, evt))
     thread.start()
 
+    self.thread = thread
+
   def _process_evt(self, speaker_id, evt):
     self.stats.refresh_vct()
     ctx = np.concatenate([evt, self.stats.vct])
@@ -38,22 +47,39 @@ class Recommender:
     action_idx = self.model.act(ctx)
 
     if action_idx is None:
-      print('No action')
+      self.log('model gives no action')
       return
 
+    self.log('model gives action', action_idx)
+
     action = ACTIONS[action_idx]
-    empathid, err = self._send_action(speaker_id, action)
+    err, empathid = self._send_action(speaker_id, action)
+
+    if err:
+      self.log('send action error:', err)
+      return
+    elif not empathid:
+      self.log('no empathid, action not send')
+      return
+
+    self.log('action sent #id', empathid)
 
     # if send recommendation successfully
-    if not err and empathid:
-      err, reward = self.get_reward(empathid, ctx, action_idx)
-      if not err:
-        self.model.update(ctx, action_idx, reward)
+    err, reward = self.get_reward(empathid, ctx, action_idx)
+    if err:
+      self.log('retrieve reward error:', err)
+      return
+
+    self.log('reward retrieved', reward)
+    self.model.update(ctx, action_idx, reward)
 
   def get_reward(self, empathid, ctx, action_idx):
     '''
     temp mocked reward
     '''
+    if self.mock:
+      return None, self.mock_scenario.insight(0, ctx, action_idx)[0]
+
     # connect to database
     db = pymysql.connect('localhost', 'root', '', 'ema')
     cursor = db.cursor()
@@ -63,23 +89,33 @@ class Recommender:
     time_count = 0
     reward = ""
 
-
-    #determine variablename =
-    if ((action_idx + 1) >= 0) and ((action_idx +1) <=9):
+    # determine variablename =
+    if ((action_idx + 1) >= 0) and ((action_idx + 1) <= 9):
       var_name_code = "00"+str(action_idx+1)
-    elif ((action_idx + 1) >= 10) and ((action_idx +1) <=99):
+    elif ((action_idx + 1) >= 10) and ((action_idx + 1) <= 99):
       var_name_code = "0"+str(action_idx+1)
-    elif ((action_idx + 1) >= 100) and ((action_idx +1) <=999):
+    elif ((action_idx + 1) >= 100) and ((action_idx + 1) <= 999):
       var_name_code = str(action_idx+1)
 
     # recieving reward from user
     while time.time() - current_time < 300:
-      query = "SELECT answer FROM ema_data where primkey = '1:" + empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
+      query = "SELECT answer FROM ema_data where primkey = '1:" + \
+        empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
+
+      # prepare query to insert into recommederdata table
+      insert_query = "INSERT INTO recommenderdata(empathid) \
+                     VALUES ('%s')"%\
+                     (empathid)
+      # insert the empathid to the recommenderdata table
+      try:
+        cursor.execute(insert_query)
+        db.commit()
+      except:
+        db.rollback()
 
       # if the user took some action
       if data:
-        # empathid = '999|' + str(int(time.time()))
         answer = str(cursor.fetchall()).split("'")[1]
 
         # if NO return 1
@@ -92,6 +128,10 @@ class Recommender:
           reward = 1.0
           time_count += 1
           break
+
+      # new a thread created
+      # if threading.current_thread() != self.thread:
+      #   return None, None
 
     if time_count == 0:
       err = "Timeout Error"
@@ -106,12 +146,12 @@ class Recommender:
     return err if any
     '''
 
-    err = None
-    answer = 0;
+    if self.mock:
+      return None, 'mock_id'
 
-    # connect to database
-    db = pymysql.connect('localhost', 'root', '', 'ema')
-    cursor = db.cursor()
+    err = None
+    empathid = None
+    data = ''
 
     # start time
     current_time = time.time()
@@ -119,22 +159,19 @@ class Recommender:
     struc_current_time = time.localtime(current_time)
 
     # the time must be between 8:00am and 12:00pm
-    if current_time - last_time >= 300 and (struc_current_time[3] < 25 and struc_current_time[3] > 8):
+    if struc_current_time[3] < 25 and struc_current_time[3] > 8:
       last_time = current_time
-
 
       action = str(action)
 
-      survey_id = {'0':'19', '1':'20', '2':'21'}
-      #this should be 19 through 21
+      # this should be 19 through 21
+      survey_id = {'0': '19', '1': '20', '2': '21'}
 
-      #survey_id = str(action + 19)  # each action plus 19
+      # survey_id = str(action + 19)  # each action plus 19
       # add a dictionary
-
 
       # items needed in url
       pre_empathid = '999|' + str(int(time.time()))
-      empathid = None
 
       phone_url = 'http://191.168.0.106:2226'
       server_url = 'http://191.168.0.109/ema/ema.php'
@@ -143,44 +180,62 @@ class Recommender:
 
       # sending action to phone
       try:
-        #send prequestion 22
-        url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + '22' + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + pre_empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
-        #webbrowser.open(url)  # to open on browser
+        # send prequestion 22
+        url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + '22' + '%22,%22server%22:%22' + \
+          server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + \
+          pre_empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
+        # webbrowser.open(url)  # to open on browser
 
         try:
           send = urllib.request.urlopen(url)
         except http.client.BadStatusLine:
           pass
 
-        while time.time() - current_time < 300:
-            query = "SELECT answer FROM ema_data where primkey = '1:" + pre_empathid + "' AND variablename = 'R000Q01'"
-            data = cursor.execute(query)
-            
-            # #insert time id
-            #insert_query = "INSERT INTO ema_data (primkey) VALUES " + pre_empathid
-            # cursor.execute(insert_query);
-            # connection.commit();
-            if data:
-                answer = str(cursor.fetchall()).split("'")[1]
+        # connect to database
+        db = pymysql.connect('localhost', 'root', '', 'ema')
+        cursor = db.cursor()
 
-                # if answer is yes '1' stop
-                if answer =='1':
-                  break
-                #if answer is no '2' send recommendation
-                if answer == '2':
-                  empathid = '999|' + str(int(time.time()))
-                  url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + survey_id[action] + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
-                  #webbrowser.open(url)
-                  try:
-                    send = urllib.request.urlopen(url)
-                  except http.client.BadStatusLine:
-                    pass
-                break
-        # "\",\"c\":\"startsurvey\",\"suid\":\"+ survey_id + \",\"server\":\"\"+server_url+\"\",\"androidid\":\""+androidid+"\",\"empathid\":\""+empathid+"\",\"alarm\":\""+str(alarm).lower()+"\"}'
-        # url = phone_url + '/?q={%22id%22:%22' + speaker_id + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + survey_id + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + empathid + '%22,%22alarm%22:%22true%22}'
-      except webbrowser.Error:
+        while time.time() - current_time < 300:
+          query = "SELECT answer FROM ema_data where primkey = '1:" + \
+            pre_empathid + "' AND variablename = 'R000Q01'"
+          data = cursor.execute(query)
+
+          # prepare query to insert into recommederdata table
+          insert_query = "INSERT INTO recommenderdata(empathid) \
+               VALUES ('%s')"%\
+              (pre_empathid)
+          #insert the pre_empathid to the recommenderdata table
+          try:
+            cursor.execute(insert_query)
+            db.commit()
+          except:
+            db.rollback()
+
+          if data:
+            break
+
+        db.close()
+
+        if data:
+          answer = str(cursor.fetchall()).split("'")[1]
+
+          # if answer is yes '1' stop
+          if answer == '1':
+            pass
+          # if answer is no '2' send recommendation
+          if answer == '2':
+            empathid = '999|' + str(int(time.time()))
+            url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + \
+              survey_id[action] + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + \
+              androidid + '%22,%22empathid%22:%22' + empathid + \
+              '%22,%22alarm%22:%22' + alarm + '%22}'
+
+            try:
+              send = urllib.request.urlopen(url)
+            except http.client.BadStatusLine:
+              pass
+
+      except:
         err = "Webbrowser Error"
 
-
-    db.close()
-    return empathid, err
+    return err, empathid
