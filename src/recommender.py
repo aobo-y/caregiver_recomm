@@ -174,8 +174,7 @@ class Recommender:
     struc_current_time = time.localtime(current_time)
 
     # the time must be between 8:00am and 12:00pm
-    #if struc_current_time[3] < 25 and struc_current_time[3] > 8:
-    if 1==1:
+    if struc_current_time[3] < 25 and struc_current_time[3] > 8:
       last_time = current_time
 
       action = str(action)
@@ -216,7 +215,7 @@ class Recommender:
         db = pymysql.connect('localhost', 'root', '', 'ema')
         cursor = db.cursor()
 
-        while time.time() - current_time < 30:
+        while time.time() - current_time < 300:
           query = "SELECT answer FROM ema_data where primkey = '1:" + \
             pre_empathid + "' AND variablename = 'R000Q01'"
           data = cursor.execute(query)
@@ -270,4 +269,3 @@ class Recommender:
         err = "Webbrowser Error"
 
     return err, empathid
-
