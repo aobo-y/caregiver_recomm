@@ -54,7 +54,7 @@ class Recommender:
     self.log('model gives action', action_idx)
 
     action = ACTIONS[action_idx]
-    err, empathid = self._send_action(speaker_id, action)
+    err, empathid, action = self._send_action(speaker_id, action)
 
     if err:
       self.log('send action error:', err)
@@ -66,7 +66,7 @@ class Recommender:
     self.log('action sent #id', empathid)
 
     # if send recommendation successfully
-    err, reward = self.get_reward(empathid, ctx, action_idx)
+    err, reward = self.get_reward(empathid,action, ctx, action_idx)
     if err:
       self.log('retrieve reward error:', err)
       return
@@ -74,7 +74,7 @@ class Recommender:
     self.log('reward retrieved', reward)
     self.model.update(ctx, action_idx, reward)
 
-  def get_reward(self, empathid, ctx, action_idx):
+  def get_reward(self, empathid,action, ctx, action_idx):
     '''
     temp mocked reward
     '''
@@ -86,6 +86,8 @@ class Recommender:
     # date and time format of the time the prequestion is sent
     time_sent = str(datetime.fromtimestamp(int(time1)))
 
+    survey_id = {'0': '19', '1': '20', '2': '21'}
+
     # connect to database
     db = pymysql.connect('localhost', 'root', '', 'ema')
     cursor = db.cursor()
@@ -94,7 +96,7 @@ class Recommender:
 
     time_received ="NA"
     time_count = 0
-    reward = 2.0 #if no reward is recieved
+    reward = -1.0 #if no reward is recieved
 
     # determine variablename =
     if ((action_idx + 1) >= 0) and ((action_idx + 1) <= 9):
@@ -139,7 +141,7 @@ class Recommender:
     # prepare query to insert into recommederdata table
     insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
         VALUES ('%s','%s','%s','%s', '%s')" % \
-        (empathid, time_sent, '22', time_received, reward)
+        (empathid, time_sent, survey_id[action], time_received, reward)
     # insert the data to the recommenderdata table
     try:
       cursor.execute(insert_query)
@@ -167,6 +169,7 @@ class Recommender:
     empathid = None
     data = ''
     time_received="NA"
+    response = -1.0
 
     # start time
     current_time = time.time()
@@ -194,7 +197,7 @@ class Recommender:
       pre_empathid = '999|' + time1
 
       phone_url = 'http://191.168.0.106:2226'
-      server_url = 'http://191.168.0.109/ema/ema.php'
+      server_url = 'http://191.168.0.107/ema/ema.php'
       androidid = 'db7d3cdb88e1a62a'
       alarm = 'true'
 
@@ -227,22 +230,6 @@ class Recommender:
             time_received = str(datetime.fromtimestamp(int(time2)))
             break
 
-        #determine response to insert to recommenderdata
-        if data:
-          response = 1.0
-        else:
-          response = 0.0
-
-        # prepare query to insert into recommederdata table
-        insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
-             VALUES ('%s','%s','%s','%s', '%s')" % \
-            (pre_empathid, time_sent, '22', time_received, response)
-        # insert the data to the recommenderdata table
-        try:
-          cursor.execute(insert_query)
-          db.commit()
-        except:
-          db.rollback()
 
         db.close()
 
@@ -251,9 +238,10 @@ class Recommender:
 
           # if answer is yes '1' stop
           if answer == '1':
-            pass
+            response = 1.0
           # if answer is no '2' send recommendation
           if answer == '2':
+            response = 0.0
             empathid = '999|' + str(int(time.time()))
             url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + \
               survey_id[action] + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + \
@@ -265,7 +253,24 @@ class Recommender:
             except http.client.BadStatusLine:
               pass
 
+        dbr = pymysql.connect('localhost', 'root', '', 'ema')
+        cursor2 = dbr.cursor()
+        # prepare query to insert into recommederdata table
+        insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
+             VALUES ('%s','%s','%s','%s', '%s')" % \
+            (pre_empathid, time_sent, '22', time_received, response)
+        # insert the data to the recommenderdata table
+        try:
+          cursor2.execute(insert_query)
+          dbr.commit()
+        except:
+          dbr.rollback()
+
+        dbr.close()
+
+
       except:
         err = "Webbrowser Error"
 
-    return err, empathid
+
+    return err, empathid, action
