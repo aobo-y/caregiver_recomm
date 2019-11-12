@@ -12,7 +12,6 @@ import pymysql
 from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
-from datetime import datetime
 
 
 ACTIONS = [0, 1, 2]
@@ -54,7 +53,7 @@ class Recommender:
     self.log('model gives action', action_idx)
 
     action = ACTIONS[action_idx]
-    err, empathid, action = self._send_action(speaker_id, action)
+    err, empathid = self._send_action(speaker_id, action)
 
     if err:
       self.log('send action error:', err)
@@ -66,7 +65,7 @@ class Recommender:
     self.log('action sent #id', empathid)
 
     # if send recommendation successfully
-    err, reward = self.get_reward(empathid,action, ctx, action_idx)
+    err, reward = self.get_reward(empathid, ctx, action_idx)
     if err:
       self.log('retrieve reward error:', err)
       return
@@ -74,19 +73,12 @@ class Recommender:
     self.log('reward retrieved', reward)
     self.model.update(ctx, action_idx, reward)
 
-  def get_reward(self, empathid,action, ctx, action_idx):
+  def get_reward(self, empathid, ctx, action_idx):
     '''
     temp mocked reward
     '''
     if self.mock:
       return None, self.mock_scenario.insight(0, ctx, action_idx)[0]
-
-    # time sending the recommendation
-    time1 = str(int(time.time()))
-    # date and time format of the time the prequestion is sent
-    time_sent = str(datetime.fromtimestamp(int(time1)))
-
-    survey_id = {'0': '19', '1': '20', '2': '21'}
 
     # connect to database
     db = pymysql.connect('localhost', 'root', '', 'ema')
@@ -94,9 +86,8 @@ class Recommender:
     current_time = time.time()
     err = None
 
-    time_received ="NA"
     time_count = 0
-    reward = -1.0 #if no reward is recieved
+    reward = ""
 
     # determine variablename =
     if ((action_idx + 1) >= 0) and ((action_idx + 1) <= 9):
@@ -112,16 +103,9 @@ class Recommender:
         empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
 
-
-
       # if the user took some action
       if data:
         answer = str(cursor.fetchall()).split("'")[1]
-
-        # time reward is recieved
-        time2 = str(int(time.time()))
-        # change time to date time format
-        time_received = str(datetime.fromtimestamp(int(time2)))
 
         # if NO return 1
         if answer == '2':
@@ -137,17 +121,6 @@ class Recommender:
       # new a thread created
       # if threading.current_thread() != self.thread:
       #   return None, None
-
-    # prepare query to insert into recommederdata table
-    insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
-        VALUES ('%s','%s','%s','%s', '%s')" % \
-        (empathid, time_sent, survey_id[action], time_received, reward)
-    # insert the data to the recommenderdata table
-    try:
-      cursor.execute(insert_query)
-      db.commit()
-    except:
-      db.rollback()
 
     if time_count == 0:
       err = "Timeout Error"
@@ -167,9 +140,6 @@ class Recommender:
 
     err = None
     empathid = None
-    data = ''
-    time_received="NA"
-    response = -1.0
 
     # start time
     current_time = time.time()
@@ -188,16 +158,11 @@ class Recommender:
       # survey_id = str(action + 19)  # each action plus 19
       # add a dictionary
 
-      #time sending the prequestion
-      time1 = str(int(time.time()))
-      #date and time format of the time the prequestion is sent
-      time_sent = str(datetime.fromtimestamp(int(time1)))
-
       # items needed in url
-      pre_empathid = '999|' + time1
+      pre_empathid = '999|' + str(int(time.time()))
 
       phone_url = 'http://191.168.0.106:2226'
-      server_url = 'http://191.168.0.107/ema/ema.php'
+      server_url = 'http://191.168.0.109/ema/ema.php'
       androidid = 'db7d3cdb88e1a62a'
       alarm = 'true'
 
@@ -224,12 +189,7 @@ class Recommender:
           data = cursor.execute(query)
 
           if data:
-            #time prequestion is recieved
-            time2 = str(int(time.time()))
-            #change time to date time format
-            time_received = str(datetime.fromtimestamp(int(time2)))
             break
-
 
         db.close()
 
@@ -238,10 +198,9 @@ class Recommender:
 
           # if answer is yes '1' stop
           if answer == '1':
-            response = 1.0
+            pass
           # if answer is no '2' send recommendation
           if answer == '2':
-            response = 0.0
             empathid = '999|' + str(int(time.time()))
             url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + \
               survey_id[action] + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + \
@@ -253,24 +212,7 @@ class Recommender:
             except http.client.BadStatusLine:
               pass
 
-        dbr = pymysql.connect('localhost', 'root', '', 'ema')
-        cursor2 = dbr.cursor()
-        # prepare query to insert into recommederdata table
-        insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
-             VALUES ('%s','%s','%s','%s', '%s')" % \
-            (pre_empathid, time_sent, '22', time_received, response)
-        # insert the data to the recommenderdata table
-        try:
-          cursor2.execute(insert_query)
-          dbr.commit()
-        except:
-          dbr.rollback()
-
-        dbr.close()
-
-
       except:
         err = "Webbrowser Error"
 
-
-    return err, empathid, action
+    return err, empathid

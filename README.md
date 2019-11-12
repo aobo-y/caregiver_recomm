@@ -12,8 +12,9 @@ recomm.dispatch(speaker_id, evt)
 ### Recommender(evt_dim=4)
 
 - **evt_dim**: Event dimensions, default `4`
+- **mock**: Simulate the user interaction, default `False`
 
 ### dispatch(speaker_id, evt)
 
-- **speacker_id**: 
+- **speacker_id**:
 - **evt**: numpy array or python list
