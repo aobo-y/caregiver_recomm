@@ -195,11 +195,6 @@ class Recommender:
       # sending action to phone
       try:
         # send prequestion 22
-        # webbrowser.open(url)  # to open on browser
-        # url = phone_url + '/?q={"id":"' + str(speaker_id) + '","c":"startsurvey","suid":"' + '22' + '","server":"' + \
-        #   server_url + '","androidid":"' + androidid + '","empathid":"' + \
-        #   pre_empathid + '","alarm":"' + alarm + '"}'
-        # url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
 
         url_dict = {
           "id": str(speaker_id),
