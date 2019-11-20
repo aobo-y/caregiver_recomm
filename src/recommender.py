@@ -12,6 +12,7 @@ import urllib.parse
 from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
+import json
 
 
 
@@ -195,12 +196,24 @@ class Recommender:
       try:
         # send prequestion 22
         # webbrowser.open(url)  # to open on browser
-        url = phone_url + '/?q={"id":"' + str(speaker_id) + '","c":"startsurvey","suid":"' + '22' + '","server":"' + \
-          server_url + '","androidid":"' + androidid + '","empathid":"' + \
-          pre_empathid + '","alarm":"' + alarm + '"}'
+        # url = phone_url + '/?q={"id":"' + str(speaker_id) + '","c":"startsurvey","suid":"' + '22' + '","server":"' + \
+        #   server_url + '","androidid":"' + androidid + '","empathid":"' + \
+        #   pre_empathid + '","alarm":"' + alarm + '"}'
+        # url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
+
+        url_dict = {
+          "id": str(speaker_id),
+          "c":"startsurvey",
+          "suid": '22',
+          "server": server_url,
+          "androidid": androidid,
+          "empathid": pre_empathid,
+          "alarm": alarm
+        }
+
+        url_string = json.dumps(url_dict)
+        url =phone_url + '/?q='+ url_string
         url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
-
-
         try:
           send = urllib.request.urlopen(url)
         except http.client.BadStatusLine:
@@ -242,10 +255,18 @@ class Recommender:
             #empathid of the recommendation
             empathid = '999|' + time2
 
-            url = phone_url + '/?q={"id":"' + str(speaker_id) + '","c":"startsurvey","suid":"' + \
-              survey_id[action] + '","server":"' + server_url + '","androidid":"' + \
-              androidid + '","empathid":"' + empathid + \
-              '","alarm":"' + alarm + '"}'
+            url_dict = {
+              "id": str(speaker_id),
+              "c": "startsurvey",
+              "suid": survey_id[action],
+              "server": server_url,
+              "androidid": androidid,
+              "empathid": empathid,
+              "alarm": alarm
+            }
+
+            url_string = json.dumps(url_dict)
+            url = phone_url + '/?q=' + url_string
             url = urllib.parse.quote(url, safe=':?={}/')  # encoding url quotes become %22
 
             try:
