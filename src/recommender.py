@@ -206,10 +206,6 @@ class Recommender:
           'alarm': alarm
         }
 
-        # url_string = json.dumps(url_dict)
-        # url =phone_url + '/?q='+ url_string
-        # url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
-
         q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
         url = phone_url + '/?q=' + q_dict_string
         try:
@@ -262,10 +258,6 @@ class Recommender:
               'empathid': empathid,
               'alarm': alarm
             }
-
-            # url_string = json.dumps(url_dict)
-            # url = phone_url + '/?q=' + url_string
-            # url = urllib.parse.quote(url, safe=':?={}/')  # encoding url quotes become %22
 
             q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
             url = phone_url + '/?q=' + q_dict_string
