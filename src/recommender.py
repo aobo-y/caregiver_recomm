@@ -5,13 +5,14 @@ from datetime import datetime
 import webbrowser
 import urllib.request
 import http
-
+import urllib
 import numpy as np
 import pymysql
-
+import urllib.parse
 from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
+import json
 
 
 
@@ -194,11 +195,20 @@ class Recommender:
       # sending action to phone
       try:
         # send prequestion 22
-        url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + '22' + '%22,%22server%22:%22' + \
-          server_url + '%22,%22androidid%22:%22' + androidid + '%22,%22empathid%22:%22' + \
-          pre_empathid + '%22,%22alarm%22:%22' + alarm + '%22}'
-        # webbrowser.open(url)  # to open on browser
 
+        url_dict = {
+          "id": str(speaker_id),
+          "c":"startsurvey",
+          "suid": '22',
+          "server": server_url,
+          "androidid": androidid,
+          "empathid": pre_empathid,
+          "alarm": alarm
+        }
+
+        url_string = json.dumps(url_dict)
+        url =phone_url + '/?q='+ url_string
+        url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
         try:
           send = urllib.request.urlopen(url)
         except http.client.BadStatusLine:
@@ -240,10 +250,19 @@ class Recommender:
             #empathid of the recommendation
             empathid = '999|' + time2
 
-            url = phone_url + '/?q={%22id%22:%22' + str(speaker_id) + '%22,%22c%22:%22startsurvey%22,%22suid%22:%22' + \
-              survey_id[action] + '%22,%22server%22:%22' + server_url + '%22,%22androidid%22:%22' + \
-              androidid + '%22,%22empathid%22:%22' + empathid + \
-              '%22,%22alarm%22:%22' + alarm + '%22}'
+            url_dict = {
+              "id": str(speaker_id),
+              "c": "startsurvey",
+              "suid": survey_id[action],
+              "server": server_url,
+              "androidid": androidid,
+              "empathid": empathid,
+              "alarm": alarm
+            }
+
+            url_string = json.dumps(url_dict)
+            url = phone_url + '/?q=' + url_string
+            url = urllib.parse.quote(url, safe=':?={}/')  # encoding url quotes become %22
 
             try:
               send = urllib.request.urlopen(url)
