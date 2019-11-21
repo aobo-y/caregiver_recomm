@@ -93,9 +93,9 @@ class Recommender:
 
     # determine variablename =
     if ((action_idx + 1) >= 0) and ((action_idx + 1) <= 9):
-      var_name_code = "00"+str(action_idx+1)
+      var_name_code = '00'+str(action_idx+1)
     elif ((action_idx + 1) >= 10) and ((action_idx + 1) <= 99):
-      var_name_code = "0"+str(action_idx+1)
+      var_name_code = '0'+str(action_idx+1)
     elif ((action_idx + 1) >= 100) and ((action_idx + 1) <= 999):
       var_name_code = str(action_idx+1)
 
@@ -140,7 +140,7 @@ class Recommender:
       #   return None, None
 
     if time_count == 0:
-      err = "Timeout Error"
+      err = 'Timeout Error'
 
     # close database
     db.close()
@@ -157,7 +157,7 @@ class Recommender:
 
     err = None
     empathid = None
-    time_received = "NA"
+    time_received = 'NA'
     response = -1.0
     answer = ''
 
@@ -197,18 +197,21 @@ class Recommender:
         # send prequestion 22
 
         url_dict = {
-          "id": str(speaker_id),
-          "c":"startsurvey",
-          "suid": '22',
-          "server": server_url,
-          "androidid": androidid,
-          "empathid": pre_empathid,
-          "alarm": alarm
+          'id': str(speaker_id),
+          'c':'startsurvey',
+          'suid': '22',
+          'server': server_url,
+          'androidid': androidid,
+          'empathid': pre_empathid,
+          'alarm': alarm
         }
 
-        url_string = json.dumps(url_dict)
-        url =phone_url + '/?q='+ url_string
-        url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
+        # url_string = json.dumps(url_dict)
+        # url =phone_url + '/?q='+ url_string
+        # url = urllib.parse.quote(url,safe=':?={}/') #encoding url quotes become %22
+
+        q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
+        url = phone_url + '/?q=' + q_dict_string
         try:
           send = urllib.request.urlopen(url)
         except http.client.BadStatusLine:
@@ -251,19 +254,21 @@ class Recommender:
             empathid = '999|' + time2
 
             url_dict = {
-              "id": str(speaker_id),
-              "c": "startsurvey",
-              "suid": survey_id[action],
-              "server": server_url,
-              "androidid": androidid,
-              "empathid": empathid,
-              "alarm": alarm
+              'id': str(speaker_id),
+              'c': 'startsurvey',
+              'suid': survey_id[action],
+              'server': server_url,
+              'androidid': androidid,
+              'empathid': empathid,
+              'alarm': alarm
             }
 
-            url_string = json.dumps(url_dict)
-            url = phone_url + '/?q=' + url_string
-            url = urllib.parse.quote(url, safe=':?={}/')  # encoding url quotes become %22
+            # url_string = json.dumps(url_dict)
+            # url = phone_url + '/?q=' + url_string
+            # url = urllib.parse.quote(url, safe=':?={}/')  # encoding url quotes become %22
 
+            q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
+            url = phone_url + '/?q=' + q_dict_string
             try:
               send = urllib.request.urlopen(url)
             except http.client.BadStatusLine:
@@ -296,7 +301,7 @@ class Recommender:
           # prepare query to insert into recommederdata table
           insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
                          VALUES ('%s','%s','%s','%s', '%s')" % \
-                         (empathid, time_sent_recomm,survey_id[action] , "NA", -1.0)
+                         (empathid, time_sent_recomm,survey_id[action] , 'NA', -1.0)
           # insert the data to the recommenderdata table
           try:
             cursor3.execute(insert_query)
@@ -308,6 +313,6 @@ class Recommender:
 
 
       except:
-        err = "Webbrowser Error"
+        err = 'Webbrowser Error'
 
     return err, empathid
