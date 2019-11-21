@@ -19,6 +19,9 @@ import json
 
 ACTIONS = [0, 1, 2]
 
+def log(*args):
+  time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  print('[RECOMM]', f'{time}    ', *args)
 
 class ServerModelAdpator:
   def __init__(self, client_id=0, url='http://localhost:8000/'):
@@ -29,26 +32,65 @@ class ServerModelAdpator:
     return self.proxy.act(self.client_id, ctx.tolist())
 
   def update(self, ctx, choice, reward):
-    return self.proxy.update(self.client_id, ctx.tolist(), choice, int(reward))
+    return self.proxy.update(self.client_id, ctx.tolist(), int(choice), int(reward))
+
+
+class RemoteLocalBlender:
+  def __init__(self, local_model, server_config):
+    self.local_model = local_model
+    self.remote_model = ServerModelAdpator(**server_config)
+
+    self.remote_status = True
+
+  def _remote(self, callback):
+    res = None
+
+    try:
+      res = callback()
+
+      if not self.remote_status:
+        log('Rebuild remote server connection, switch to remote service')
+        self.remote_status = True
+
+    except (ConnectionRefusedError, http.client.CannotSendRequest):
+      if self.remote_status:
+        log('Lost remote server connection, switch to local service')
+        self.remote_status = False
+
+    # except xmlrpc.client.Fault as err:
+    #   print("A remote fault occurred")
+    #   print("Fault code: %d" % err.faultCode)
+    #   print("Fault string: %s" % err.faultString)
+
+    return res
+
+  def act(self, *args, **kargs):
+    res = self._remote(lambda: self.remote_model.act(*args, **kargs))
+    if self.remote_status:
+      return res
+
+    return self.local_model.act(*args, **kargs)
+
+  def update(self, *args, **kargs):
+    res = self._remote(lambda: self.remote_model.update(*args, **kargs))
+
+    local_res = self.local_model.update(*args, **kargs)
+
+    return res if self.remote_status else local_res
 
 class Recommender:
   def __init__(self, evt_dim=4, mock=False, server_config=None):
     ctx_size = evt_dim + len(ACTIONS)
 
-    if not server_config:
-      self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
-    else:
-      self.model = ServerModelAdpator(**server_config)
+    self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
+    if server_config:
+      self.model = RemoteLocalBlender(self.model, server_config)
 
     self.stats = Stats(len(ACTIONS), expire_after=1800)
 
     self.mock = mock
     if self.mock:
       self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
-
-  def log(self, *args):
-    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print('[RECOMM]', f'{time}    ', *args)
 
   def dispatch(self, speaker_id, evt):
     if not isinstance(evt, np.ndarray):
@@ -66,30 +108,30 @@ class Recommender:
     action_idx = self.model.act(ctx)
 
     if action_idx is None:
-      self.log('model gives no action')
+      log('model gives no action')
       return
 
-    self.log('model gives action', action_idx)
+    log('model gives action', action_idx)
 
     action = ACTIONS[action_idx]
     err, empathid = self._send_action(speaker_id, action)
 
     if err:
-      self.log('send action error:', err)
+      log('send action error:', err)
       return
     elif not empathid:
-      self.log('no empathid, action not send')
+      log('no empathid, action not send')
       return
 
-    self.log('action sent #id', empathid)
+    log('action sent #id', empathid)
 
     # if send recommendation successfully
     err, reward = self.get_reward(empathid, ctx, action_idx)
     if err:
-      self.log('retrieve reward error:', err)
+      log('retrieve reward error:', err)
       return
 
-    self.log('reward retrieved', reward)
+    log('reward retrieved', reward)
     self.model.update(ctx, action_idx, reward)
 
     # update stats
