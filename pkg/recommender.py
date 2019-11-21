@@ -6,6 +6,8 @@ import webbrowser
 import urllib.request
 import http
 import urllib
+import xmlrpc.client
+
 import numpy as np
 import pymysql
 import urllib.parse
@@ -15,14 +17,29 @@ from .stats import Stats
 import json
 
 
-
 ACTIONS = [0, 1, 2]
 
 
+class ServerModelAdpator:
+  def __init__(self, client_id=0, url='http://localhost:8000/'):
+    self.proxy = xmlrpc.client.ServerProxy(url, allow_none=True)
+    self.client_id = client_id
+
+  def act(self, ctx):
+    return self.proxy.act(self.client_id, ctx.tolist())
+
+  def update(self, ctx, choice, reward):
+    return self.proxy.update(self.client_id, ctx.tolist(), choice, int(reward))
+
 class Recommender:
-  def __init__(self, evt_dim=4, mock=False):
+  def __init__(self, evt_dim=4, mock=False, server_config=None):
     ctx_size = evt_dim + len(ACTIONS)
-    self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
+
+    if not server_config:
+      self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
+    else:
+      self.model = ServerModelAdpator(**server_config)
+
     self.stats = Stats(len(ACTIONS), expire_after=1800)
 
     self.mock = mock
@@ -74,6 +91,9 @@ class Recommender:
 
     self.log('reward retrieved', reward)
     self.model.update(ctx, action_idx, reward)
+
+    # update stats
+    self.stats.update(action_idx)
 
   def get_reward(self, empathid, ctx, action_idx):
     '''

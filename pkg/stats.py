@@ -18,7 +18,7 @@ class Stats:
       time = datetime.now()
 
     while self.history \
-      and self.history[0]['time'] + self.expire_after <= self.time:
+      and self.history[0]['time'] + self.expire_after <= time:
       recomm = self.history.popleft()
       self.vct[recomm['action']] -= 1
 

@@ -1,8 +1,10 @@
 import time
-from src.recommender import Recommender
+import argparse
 
-def main():
-  recommender = Recommender(mock=True)
+from pkg.recommender import Recommender
+
+def main(server_config=None):
+  recommender = Recommender(mock=True, server_config=server_config)
   recommender.dispatch(1, [0, 1, 2, 0])
   time.sleep(2)
   recommender.dispatch(1, [0, 1, 2, 0])
@@ -14,4 +16,13 @@ def main():
   recommender.dispatch(1, [0, 2, 1, 0])
 
 if __name__ == "__main__":
-  main()
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--id', type=int)
+  parser.add_argument('--server')
+  args = parser.parse_args()
+
+  server_config = None
+  if args.id is not None and args.server:
+    server_config = {'client_id': args.id, 'url': args.server}
+
+  main(server_config=server_config)

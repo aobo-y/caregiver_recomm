@@ -1,1 +1,1 @@
-from .src.recommender import Recommender
+from .pkg.recommender import Recommender
