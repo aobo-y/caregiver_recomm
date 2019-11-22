@@ -30,7 +30,7 @@ if __name__ == "__main__":
 
   port = args.port if args.port else PORT
 
-  server = SimpleXMLRPCServer(('localhost', port), allow_none=True)
+  server = SimpleXMLRPCServer(('0.0.0.0', port), allow_none=True)
 
   server.register_function(act, 'act')
   server.register_function(update, 'update')
