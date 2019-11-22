@@ -38,6 +38,9 @@ class ServerModelAdpator:
 class RemoteLocalBlender:
   def __init__(self, local_model, server_config):
     self.local_model = local_model
+
+    log('Remote server:', server_config['url'])
+    log('Client ID:', server_config['client_id'])
     self.remote_model = ServerModelAdpator(**server_config)
 
     self.remote_status = True
@@ -78,8 +81,11 @@ class RemoteLocalBlender:
 
     return res if self.remote_status else local_res
 
+# temporarily hardcode server config for easier integrate for not
+temp_server_config = {'client_id': 0, 'url': 'http://hcdm4.cs.virginia.edu:8989'}
+
 class Recommender:
-  def __init__(self, evt_dim=4, mock=False, server_config=None):
+  def __init__(self, evt_dim=4, mock=False, server_config=temp_server_config):
     ctx_size = evt_dim + len(ACTIONS)
 
     self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)

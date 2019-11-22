@@ -13,6 +13,9 @@ recomm.dispatch(speaker_id, evt)
 
 - **evt_dim**: Event dimensions, default `4`
 - **mock**: Simulate the user interaction, default `False`
+- **server_config**: Remote server configuration, default `None`
+  - **client_id**: client id
+  - **url**: server url
 
 ### dispatch(speaker_id, evt)
 
