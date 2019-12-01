@@ -193,8 +193,8 @@ class Recommender:
           time_count += 1
 
         # prepare query to update into recommederdata table with response
-        update_query = ("UPDATE recommenderdata SET TimeReceived='%s', Response='%s' WHERE empathid ='%s'" % (time_received,reward,empathid))
-        # insert the data to the recommenderdata table
+        update_query = ("UPDATE reward_data SET TimeReceived='%s', Response='%s' WHERE empathid ='%s'" % (time_received,reward,empathid))
+        # insert the data to the reward_data table
         try:
           cursor.execute(update_query)
           db.commit()
@@ -338,12 +338,12 @@ class Recommender:
         dbr = pymysql.connect('localhost', 'root', '', 'ema')
         cursor2 = dbr.cursor()
 
-        #inserting prequestion to recommenderdata
-        # prepare query to insert into recommederdata table
-        insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
+        #inserting prequestion to reward_data
+        # prepare query to insert into reward_data table
+        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response) \
              VALUES ('%s','%s','%s','%s', '%s')" % \
                        (pre_empathid, time_sent, '22', time_received, response)
-        # insert the data to the recommenderdata table
+        # insert the data to the reward_table
         try:
           cursor2.execute(insert_query)
           dbr.commit()
@@ -352,17 +352,17 @@ class Recommender:
 
         dbr.close()
 
-        #if recommendation is sent, insert data to recommenderdata table
+        #if recommendation is sent, insert data to reward_data table
         if answer =='2':
           db2 = pymysql.connect('localhost', 'root', '', 'ema')
           cursor3 = db2.cursor()
 
-          # inserting prequestion to recommenderdata
-          # prepare query to insert into recommederdata table
-          insert_query = "INSERT INTO recommenderdata(empathid,TimeSent,RecommSent,TimeReceived,Response) \
+          # inserting prequestion to reward_data
+          # prepare query to insert into reward_data table
+          insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response) \
                          VALUES ('%s','%s','%s','%s', '%s')" % \
                          (empathid, time_sent_recomm,survey_id[action] , 'NA', -1.0)
-          # insert the data to the recommenderdata table
+          # insert the data to the reward_data table
           try:
             cursor3.execute(insert_query)
             db2.commit()
