@@ -340,9 +340,9 @@ class Recommender:
 
         #inserting prequestion to reward_data
         # prepare query to insert into reward_data table
-        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response) \
-             VALUES ('%s','%s','%s','%s', '%s')" % \
-                       (pre_empathid, time_sent, '22', time_received, response)
+        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
+             VALUES ('%s','%s','%s','%s', '%s','%s')" % \
+                       (pre_empathid, time_sent, '22', time_received, response,0)
         # insert the data to the reward_table
         try:
           cursor2.execute(insert_query)
@@ -359,9 +359,9 @@ class Recommender:
 
           # inserting prequestion to reward_data
           # prepare query to insert into reward_data table
-          insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response) \
-                         VALUES ('%s','%s','%s','%s', '%s')" % \
-                         (empathid, time_sent_recomm,survey_id[action] , 'NA', -1.0)
+          insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
+                         VALUES ('%s','%s','%s','%s', '%s','%s')" % \
+                         (empathid, time_sent_recomm,survey_id[action] , 'NA', -1.0,0)
           # insert the data to the reward_data table
           try:
             cursor3.execute(insert_query)
