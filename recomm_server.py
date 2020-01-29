@@ -13,10 +13,9 @@ alpha = 3.
 
 model = MultiLinUCB(ctx_size + n_choices, n_choices, n_tasks, alpha=alpha)
 
-def act(task, ctx):
+def act(task, ctx, **kargs):
   print(f'request recommendation from client #{task}:', ctx)
-  action = model.act(task, np.array(ctx))
-  return action if action is None else int(action)
+  return model.act(task, np.array(ctx), **kargs)
 
 def update(task, ctx, choice, reward):
   print(f'request update from client #{task}:', ctx, choice, reward)

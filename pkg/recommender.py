@@ -111,7 +111,7 @@ class Recommender:
     self.stats.refresh_vct()
     ctx = np.concatenate([evt, self.stats.vct])
 
-    action_idx = self.model.act(ctx)
+    action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
 
     if action_idx is None:
       log('model gives no action')
@@ -136,6 +136,14 @@ class Recommender:
     if err:
       log('retrieve reward error:', err)
       return
+
+    self.record_data({
+      'event_vct': evt.tolist(),
+      'stats_vct': self.stats.vct.tolist(),
+      'action': action,
+      'reward': reward,
+      'action_ucbs': ucbs
+    })
 
     log('reward retrieved', reward)
     self.model.update(ctx, action_idx, reward)
@@ -376,3 +384,12 @@ class Recommender:
         err = 'Webbrowser Error'
 
     return err, empathid
+
+  def record_data(self, data):
+    event_vct = json.dumps(data['event_vct'])
+    stats_vct = json.dumps(data['stats_vct'])
+    action = data['action']
+    reward = data['reward']
+    action_ucbs = json.dumps(data['action_ucbs'])
+
+    # insert to db

@@ -29,9 +29,9 @@ class MultiLinUCB(LinUCB):
 
     return new_ctx
 
-  def act(self, task, ctx):
+  def act(self, task, ctx, **kargs):
     new_ctx = self.cvt_ctx(task, ctx)
-    choice = super().act(new_ctx)
+    choice = super().act(new_ctx, **kargs)
     return choice
 
   def update(self, task, ctx, choice, reward):

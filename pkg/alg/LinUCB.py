@@ -14,7 +14,7 @@ class LinUCB:
       } for i in range(n_choices)
     ]
 
-  def act(self, ctx):
+  def act(self, ctx, return_ucbs=False):
     ptas = []
 
     for arm in self.arms:
@@ -31,7 +31,12 @@ class LinUCB:
     # if np.max(ptas) > 0:
     #   print(ptas)
     if ptas[choice] < 0:
-      return None
+      choice = None
+    else:
+      choice = int(choice)
+
+    if return_ucbs:
+      return choice, ptas
 
     return choice
 
