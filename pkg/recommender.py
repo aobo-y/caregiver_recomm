@@ -391,5 +391,23 @@ class Recommender:
     action = data['action']
     reward = data['reward']
     action_ucbs = json.dumps(data['action_ucbs'])
+    time = datetime.now()
 
     # insert to db
+    storing_db = pymysql.connect('localhost', 'root', '', 'ema')
+    storing_cursor = storing_db.cursor()
+
+    # inserting into ema_storing_data table
+    # prepare query to insert into ema_storing_data table
+    insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,uploaded) \
+                 VALUES ('%s','%s','%s','%s', '%s','%s','%s')" % \
+                   (time, event_vct, stats_vct, action,reward, action_ucbs,0)
+    # insert the data
+    try:
+      storing_cursor.execute(insert_query)
+      storing_db.commit()
+    except:
+      storing_db.rollback()
+
+    storing_db.close()
+
