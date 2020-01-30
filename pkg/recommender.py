@@ -28,8 +28,8 @@ class ServerModelAdpator:
     self.proxy = xmlrpc.client.ServerProxy(url, allow_none=True)
     self.client_id = client_id
 
-  def act(self, ctx):
-    return self.proxy.act(self.client_id, ctx.tolist())
+  def act(self, ctx, return_ucbs=False):
+    return self.proxy.act(self.client_id, ctx.tolist(), return_ucbs)
 
   def update(self, ctx, choice, reward):
     return self.proxy.update(self.client_id, ctx.tolist(), int(choice), int(reward))
@@ -386,6 +386,9 @@ class Recommender:
     return err, empathid
 
   def record_data(self, data):
+    if self.mock:
+      return
+
     event_vct = json.dumps(data['event_vct'])
     stats_vct = json.dumps(data['stats_vct'])
     action = data['action']

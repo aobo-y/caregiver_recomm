@@ -13,9 +13,10 @@ alpha = 3.
 
 model = MultiLinUCB(ctx_size + n_choices, n_choices, n_tasks, alpha=alpha)
 
-def act(task, ctx, **kargs):
+def act(task, ctx, return_ucbs):
   print(f'request recommendation from client #{task}:', ctx)
-  return model.act(task, np.array(ctx), **kargs)
+  res = model.act(task, np.array(ctx), return_ucbs=return_ucbs)
+  return res
 
 def update(task, ctx, choice, reward):
   print(f'request update from client #{task}:', ctx, choice, reward)
@@ -24,7 +25,7 @@ def update(task, ctx, choice, reward):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('--port', '-p', type=int)
+  parser.add_argument('--port', '-p', type=int, default=8989)
   args = parser.parse_args()
 
   port = args.port if args.port else PORT

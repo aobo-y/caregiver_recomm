@@ -36,7 +36,7 @@ class LinUCB:
       choice = int(choice)
 
     if return_ucbs:
-      return choice, ptas
+      return choice, [float(n) for n in ptas]
 
     return choice
 
