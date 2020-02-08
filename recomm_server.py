@@ -6,7 +6,7 @@ from pkg.alg import MultiLinUCB
 
 PORT = 8000
 
-ctx_size = 4
+ctx_size = 5
 n_choices = 3
 n_tasks = 4
 alpha = 3.

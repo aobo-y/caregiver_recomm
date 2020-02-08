@@ -85,7 +85,7 @@ class RemoteLocalBlender:
 temp_server_config = {'client_id': 0, 'url': 'http://hcdm4.cs.virginia.edu:8989'}
 
 class Recommender:
-  def __init__(self, evt_dim=4, mock=False, server_config=temp_server_config):
+  def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config):
     ctx_size = evt_dim + len(ACTIONS)
 
     self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
