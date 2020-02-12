@@ -16,6 +16,8 @@ model = MultiLinUCB(ctx_size + n_choices, n_choices, n_tasks, alpha=alpha)
 def act(task, ctx, return_ucbs):
   print(f'request recommendation from client #{task}:', ctx)
   res = model.act(task, np.array(ctx), return_ucbs=return_ucbs)
+  print(f'model gives action {res[0]} to client #{task}')
+
   return res
 
 def update(task, ctx, choice, reward):
