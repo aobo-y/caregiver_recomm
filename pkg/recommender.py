@@ -132,7 +132,7 @@ class Recommender:
     log('action sent #id', empathid)
 
     # if send recommendation successfully
-    err, reward = self.get_reward(empathid, ctx, action_idx)
+    err, reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
     if err:
       log('retrieve reward error:', err)
       return
@@ -151,7 +151,7 @@ class Recommender:
     # update stats
     self.stats.update(action_idx)
 
-  def get_reward(self, empathid, ctx, action_idx):
+  def get_reward(self, empathid, ctx, action_idx, speaker_id):
     '''
     temp mocked reward
     '''
@@ -177,7 +177,7 @@ class Recommender:
 
     # recieving reward from user
     while time.time() - current_time < 300:
-      query = "SELECT answer FROM ema_data where primkey = '1:" + \
+      query = "SELECT answer FROM ema_data where primkey = '"+str(speaker_id) + ":" + \
         empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
 
@@ -281,7 +281,6 @@ class Recommender:
           'empathid': pre_empathid,
           'alarm': alarm
         }
-
         q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
         url = phone_url + '/?q=' + q_dict_string
         try:
@@ -294,7 +293,7 @@ class Recommender:
         cursor = db.cursor()
 
         while time.time() - current_time < 300:
-          query = "SELECT answer FROM ema_data where primkey = '1:" + \
+          query = "SELECT answer FROM ema_data where primkey = '" + url_dict['id'] + ":" + \
             pre_empathid + "' AND variablename = 'R000Q01'"
           data = cursor.execute(query)
 
