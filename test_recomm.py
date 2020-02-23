@@ -7,15 +7,15 @@ def main(server_config=None):
   recommender = Recommender(mock=True, server_config=server_config)
 
   while True:
-    recommender.dispatch(1, [0, 1, 2, 0])
+    recommender.dispatch(1, [0, 1, 2, 0, 0])
     time.sleep(4)
-    recommender.dispatch(1, [0, 1, 2, 0])
+    recommender.dispatch(1, [0, 1, 2, 0, 1])
     time.sleep(4)
-    recommender.dispatch(1, [0, 1, 2, 0])
+    recommender.dispatch(1, [0, 1, 2, 0, 1])
     time.sleep(4)
-    recommender.dispatch(1, [2, 1, 2, 0])
+    recommender.dispatch(1, [2, 1, 2, 0, 2])
     time.sleep(4)
-    recommender.dispatch(1, [0, 2, 1, 0])
+    recommender.dispatch(1, [0, 2, 1, 0, 0])
     time.sleep(4)
 
 if __name__ == "__main__":
