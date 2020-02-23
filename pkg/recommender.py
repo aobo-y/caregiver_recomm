@@ -164,9 +164,6 @@ class Recommender:
     self.stats.update(action_idx)
 
   def get_reward(self, empathid, ctx, action_idx, speaker_id):
-    '''
-    temp mocked reward
-    '''
     if self.mock:
       return None, self.mock_scenario.insight(0, ctx, action_idx)[0]
 
@@ -189,7 +186,7 @@ class Recommender:
 
     # recieving reward from user
     while time.time() - current_time < 300:
-      query = "SELECT answer FROM ema_data where primkey = '"+str(speaker_id) + ":" + \
+      query = "SELECT answer FROM ema_data where primkey = '" + str(speaker_id) + ":" + \
         empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
 
@@ -218,11 +215,12 @@ class Recommender:
         try:
           cursor.execute(update_query)
           db.commit()
-          break
         except:
-           db.rollback()
-           break
+          db.rollback()
 
+        break
+
+      time.sleep(5)
       # new a thread created
       # if threading.current_thread() != self.thread:
       #   return None, None
@@ -315,6 +313,8 @@ class Recommender:
             # change time to date time format
             time_received = str(datetime.fromtimestamp(int(time2)))
             break
+
+          time.sleep(5)
 
         db.close()
 
