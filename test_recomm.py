@@ -1,22 +1,18 @@
 import time
 import argparse
+import numpy as np
 
 from pkg.recommender import Recommender
+
+D_EVT = 5 # dimension of event
 
 def main(server_config=None):
   recommender = Recommender(mock=True, server_config=server_config)
 
   while True:
-    recommender.dispatch(1, [0, 1, 2, 0])
-    time.sleep(4)
-    recommender.dispatch(1, [0, 1, 2, 0])
-    time.sleep(4)
-    recommender.dispatch(1, [0, 1, 2, 0])
-    time.sleep(4)
-    recommender.dispatch(1, [2, 1, 2, 0])
-    time.sleep(4)
-    recommender.dispatch(1, [0, 2, 1, 0])
-    time.sleep(4)
+    evt = np.random.randn(D_EVT)
+    recommender.dispatch(1, evt)
+    time.sleep(5)
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()

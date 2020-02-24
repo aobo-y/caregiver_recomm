@@ -1,7 +1,7 @@
 import threading
 from threading import Thread
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import webbrowser
 import urllib.request
 import http
@@ -87,6 +87,7 @@ temp_server_config = {'client_id': 0, 'url': 'http://hcdm4.cs.virginia.edu:8989'
 class Recommender:
   def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config):
     ctx_size = evt_dim + len(ACTIONS)
+    self.action_cooldown = timedelta(seconds=300) # 5 min
 
     self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
     if server_config:
@@ -98,7 +99,17 @@ class Recommender:
     if self.mock:
       self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
+    self.last_action_time = datetime.now().replace(year=2000)
+
+  def cooldown_ready(self):
+    return datetime.now() - self.last_action_time > self.action_cooldown
+
   def dispatch(self, speaker_id, evt):
+    log('recommender receives event:', str(evt))
+    if not self.cooldown_ready():
+      log('recommender is in cooldown period')
+      return
+
     if not isinstance(evt, np.ndarray):
       evt = np.array(evt)
 
@@ -118,6 +129,7 @@ class Recommender:
       return
 
     log('model gives action', action_idx)
+    self.last_action_time = datetime.now()
 
     action = ACTIONS[action_idx]
     err, empathid = self._send_action(speaker_id, action)
@@ -152,9 +164,6 @@ class Recommender:
     self.stats.update(action_idx)
 
   def get_reward(self, empathid, ctx, action_idx, speaker_id):
-    '''
-    temp mocked reward
-    '''
     if self.mock:
       return None, self.mock_scenario.insight(0, ctx, action_idx)[0]
 
@@ -177,7 +186,7 @@ class Recommender:
 
     # recieving reward from user
     while time.time() - current_time < 300:
-      query = "SELECT answer FROM ema_data where primkey = '"+str(speaker_id) + ":" + \
+      query = "SELECT answer FROM ema_data where primkey = '" + str(speaker_id) + ":" + \
         empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
       data = cursor.execute(query)
 
@@ -206,11 +215,12 @@ class Recommender:
         try:
           cursor.execute(update_query)
           db.commit()
-          break
         except:
-           db.rollback()
-           break
+          db.rollback()
 
+        break
+
+      time.sleep(5)
       # new a thread created
       # if threading.current_thread() != self.thread:
       #   return None, None
@@ -303,6 +313,8 @@ class Recommender:
             # change time to date time format
             time_received = str(datetime.fromtimestamp(int(time2)))
             break
+
+          time.sleep(5)
 
         db.close()
 
