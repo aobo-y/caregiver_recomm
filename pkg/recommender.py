@@ -86,6 +86,9 @@ temp_server_config = {'client_id': 0, 'url': 'http://hcdm4.cs.virginia.edu:8989'
 
 class Recommender:
   def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config):
+
+
+
     ctx_size = evt_dim + len(ACTIONS)
     self.action_cooldown = timedelta(seconds=300) # 5 min
 
@@ -101,6 +104,13 @@ class Recommender:
 
     self.last_action_time = datetime.now().replace(year=2000)
 
+    # initialize _schedule_evt()
+    schedule_thread = Thread(target=self._schedule_evt)
+    schedule_thread.start()
+    self.schedule_thread = schedule_thread
+
+
+
   def cooldown_ready(self):
     return datetime.now() - self.last_action_time > self.action_cooldown
 
@@ -115,6 +125,7 @@ class Recommender:
 
     thread = Thread(target=self._process_evt, args=(speaker_id, evt))
     thread.start()
+
 
     self.thread = thread
 
@@ -424,4 +435,69 @@ class Recommender:
       storing_db.rollback()
 
     storing_db.close()
+
+  def _schedule_evt(self):
+    '''
+    Send the morning message at 10 am
+    '''
+
+    while True:
+      t = datetime.now()
+      if (t.hour == 10 and t.minute == 2): #CHANGE TO SPECIFIC HOUR WE WANT TO SEND MESSAGE
+        # sending action to phone
+        try:
+          # time sending the message
+          time1 = str(int(time.time()))
+          time_sent = str(datetime.fromtimestamp(int(time1)))
+
+          # items needed in url
+          pre_empathid = '999|' + time1
+
+          phone_url = 'http://191.168.0.106:2226'
+          server_url = 'http://191.168.0.107/ema/ema.php'
+          androidid = 'db7d3cdb88e1a62a'
+          alarm = 'true'
+
+          url_dict = {
+            'id': '1',#CHANGE THIS LATER
+            'c': 'startsurvey',
+            'suid': '999',
+            'server': server_url,
+            'androidid': androidid,
+            'empathid': pre_empathid,
+            'alarm': alarm
+          }
+          q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
+          url = phone_url + '/?q=' + q_dict_string
+          try:
+            send = urllib.request.urlopen(url)
+          except http.client.BadStatusLine:
+            pass
+
+
+          #upload morning message has been sent to reward_data
+          db = pymysql.connect('localhost', 'root', '', 'ema')
+          cursor = db.cursor()
+
+          insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
+                                   VALUES ('%s','%s','%s','%s', '%s','%s')" % \
+                         (pre_empathid, time_sent, '999', 'NA', -1.0, 0)
+          # insert the data to the reward_data table
+          try:
+            cursor.execute(insert_query)
+            db.commit()
+          except:
+            db.rollback()
+
+          db.close()
+
+        except:
+          err = 'Webbrowser Error'
+
+        #time.sleep(30)
+        #print("sleeping")
+        time.sleep(86400) #sleep till next morning
+
+
+
 
