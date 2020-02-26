@@ -441,20 +441,43 @@ class Recommender:
     Send the morning message at 10 am
     '''
     next_morning = ''
+    schedule_evts = [(10,'999'),(23,'998')] #(hour, event_id)
+    #early to late
+    evt_count = 0
+
     while True:
+      idx = evt_count%len(schedule_evts)
+      hour, event_id = schedule_evts[idx]
+
       now = datetime.now()
 
       #check if we have passed 10 am yet
-      if now.hour >= 10: #then you are currently in the day before
+      if idx == 0 and now.hour >= hour: #then you are currently in the day before
+        next_morning = now.replace(hour=schedule_evts[1][0], minute=0, second=0, microsecond=0)
+        #evening must be sent
+        message_id = schedule_evts[1][1]
+      if idx == 0 and now.hour < hour:
+        next_morning = now.replace(hour=schedule_evts[0][0], minute = 0, second = 0, microsecond =0)
+        #morning message must be sent
+        message_id = schedule_evts[0][1]
+      elif idx == 1 and now.hour < hour:
+        next_morning = now.replace(hour = schedule_evts[1][0], minute = 0, second = 0, microsecond = 0)
+        #evening message must be sent
+        message_id = schedule_evts[1][1]
+      elif idx == 1 and now.hour >=hour:
         #add a day to the date
         next_morning = now + timedelta(days=1)
-      #change the time to 10am
-      next_morning = next_morning.replace(hour=10, minute=0, second=0, microsecond=0)
+        next_morning = next_morning(hour= schedule_evts[0][0], minute = 0, second = 0, microsecond = 0)
+        #morning message must be sent
+        message_id = schedule_evts[0][1]
+
 
       #find the amount of time (in seconds) till 10am
       time_till_morning = (next_morning - now).total_seconds()
       #sleep till 10am
       time.sleep(time_till_morning)
+
+
 
       #SENDING the message at 10am
       try:
@@ -473,7 +496,7 @@ class Recommender:
         url_dict = {
           'id': '1',#CHANGE THIS LATER
           'c': 'startsurvey',
-          'suid': '999',
+          'suid': message_id,
           'server': server_url,
           'androidid': androidid,
           'empathid': pre_empathid,
@@ -493,7 +516,7 @@ class Recommender:
 
         insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
                                  VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-                       (pre_empathid, time_sent, '999', 'NA', -1.0, 0)
+                       (pre_empathid, time_sent, message_id, 'NA', -1.0, 0)
         # insert the data to the reward_data table
         try:
           cursor.execute(insert_query)
@@ -507,7 +530,7 @@ class Recommender:
         err = 'Webbrowser Error'
 
 
-
+      evt_count += 1
 
 
 
