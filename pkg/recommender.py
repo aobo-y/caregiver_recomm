@@ -17,6 +17,8 @@ from .stats import Stats
 import json
 
 
+import sqlite3
+
 ACTIONS = [0, 1, 2]
 
 def log(*args):
@@ -441,43 +443,57 @@ class Recommender:
     Send the morning message at 10 am
     '''
     next_morning = ''
-    schedule_evts = [(10,'999'),(23,'998')] #(hour, event_id)
-    #early to late
+    #Default message time
+    morn_hour = 10
+    morn_min = 0
+    ev_hour = 23
+    ev_min = 0
+
+    #get start time from deployment
+    try:
+      con = sqlite3.connect('C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+      cursorObj =  con.cursor()
+
+      table_name = 'RESIDENTS_DATA'
+      #select the latest deploymnet by ordering table by created date
+      cursorObj.execute("SELECT * FROM " + table_name + " ORDER BY created_date ASC LIMIT 1")
+      rows = cursorObj.fetchall()[0][11] # extract only start time
+      start_hour = int(rows[0:2])
+      start_minute = int(rows[3:5])
+    except Exception as e:
+      print(e)
+
+    con.close()
+    #For demonstration purposes, morning message sent 1 minute after start, evening message sent 30 minutes after start
+    #modified later
+    morn_hour = start_hour
+    morn_min = start_minute + 1
+    ev_hour = start_hour
+    ev_min = start_minute + 30
+
+    schedule_evts = [(timedelta(hours=morn_hour, minutes=morn_min),'999'),(timedelta(hours=ev_hour, minutes=ev_min),'998')] #(hour, event_id)
+
+    start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     evt_count = 0
+
+    #check where you are relative the interval of time
+    for delta, _ in schedule_evts:
+      if start_today + delta < datetime.now():
+        evt_count +=1
+      else:
+        break
 
     while True:
       idx = evt_count%len(schedule_evts)
-      hour, event_id = schedule_evts[idx]
+      delta, event_id = schedule_evts[idx]
+      next_evt_time = delta + datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
       now = datetime.now()
 
-      #check if we have passed 10 am yet
-      if idx == 0 and now.hour >= hour: #then you are currently in the day before
-        next_morning = now.replace(hour=schedule_evts[1][0], minute=0, second=0, microsecond=0)
-        #evening must be sent
-        message_id = schedule_evts[1][1]
-      if idx == 0 and now.hour < hour:
-        next_morning = now.replace(hour=schedule_evts[0][0], minute = 0, second = 0, microsecond =0)
-        #morning message must be sent
-        message_id = schedule_evts[0][1]
-      elif idx == 1 and now.hour < hour:
-        next_morning = now.replace(hour = schedule_evts[1][0], minute = 0, second = 0, microsecond = 0)
-        #evening message must be sent
-        message_id = schedule_evts[1][1]
-      elif idx == 1 and now.hour >=hour:
-        #add a day to the date
-        next_morning = now + timedelta(days=1)
-        next_morning = next_morning(hour= schedule_evts[0][0], minute = 0, second = 0, microsecond = 0)
-        #morning message must be sent
-        message_id = schedule_evts[0][1]
+      if next_evt_time < now:
+        next_evt_time += timedelta(days=1)
 
-
-      #find the amount of time (in seconds) till 10am
-      time_till_morning = (next_morning - now).total_seconds()
-      #sleep till 10am
-      time.sleep(time_till_morning)
-
-
+      time.sleep((next_evt_time -now).total_seconds())
 
       #SENDING the message at 10am
       try:
@@ -496,7 +512,7 @@ class Recommender:
         url_dict = {
           'id': '1',#CHANGE THIS LATER
           'c': 'startsurvey',
-          'suid': message_id,
+          'suid': event_id,
           'server': server_url,
           'androidid': androidid,
           'empathid': pre_empathid,
@@ -516,7 +532,8 @@ class Recommender:
 
         insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
                                  VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-                       (pre_empathid, time_sent, message_id, 'NA', -1.0, 0)
+                       (pre_empathid, time_sent, event_id, 'NA', -1.0, 0)
+
         # insert the data to the reward_data table
         try:
           cursor.execute(insert_query)
@@ -531,6 +548,7 @@ class Recommender:
 
 
       evt_count += 1
+
 
 
 
