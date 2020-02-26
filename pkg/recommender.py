@@ -447,12 +447,9 @@ class Recommender:
       #check if we have passed 10 am yet
       if now.hour >= 10: #then you are currently in the day before
         #add a day to the date
-        next_morning = now + timedelta(days =1)
-        #change the time to 10am
-        next_morning = next_morning.replace(hour = 10, minute = 0, second = 0, microsecond = 0)
-
-      elif now.hour < 10: #then we are at the same day
-        next_morning = now.replace(hour = 10, minute = 0, second = 0, microsecond = 0)
+        next_morning = now + timedelta(days=1)
+      #change the time to 10am
+      next_morning = next_morning.replace(hour=10, minute=0, second=0, microsecond=0)
 
       #find the amount of time (in seconds) till 10am
       time_till_morning = (next_morning - now).total_seconds()
