@@ -17,6 +17,8 @@ from .stats import Stats
 import json
 
 
+import sqlite3
+
 ACTIONS = [0, 1, 2]
 
 def log(*args):
@@ -441,72 +443,122 @@ class Recommender:
     Send the morning message at 10 am
     '''
     next_morning = ''
-    while True:
-      now = datetime.now()
+    #Default message time
+    morn_hour = 10
+    morn_min = 0
+    ev_hour = 23
+    ev_min = 0
 
-      #check if we have passed 10 am yet
-      if now.hour >= 10: #then you are currently in the day before
-        #add a day to the date
-        next_morning = now + timedelta(days=1)
-      #change the time to 10am
-      next_morning = next_morning.replace(hour=10, minute=0, second=0, microsecond=0)
+    #get start time from deployment
+    try:
+      con = sqlite3.connect('C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+      cursorObj =  con.cursor()
 
-      #find the amount of time (in seconds) till 10am
-      time_till_morning = (next_morning - now).total_seconds()
-      #sleep till 10am
-      time.sleep(time_till_morning)
+      table_name = 'RESIDENTS_DATA'
+      #select the latest deploymnet by ordering table by created date
+      cursorObj.execute("SELECT * FROM " + table_name + " ORDER BY created_date ASC LIMIT 1")
+      start_row, end_row = cursorObj.fetchall()[0][11:13] # extract start time and end time
+      start_hour, start_minute = [int(t) for t in start_row.split(':')]
+      end_hour, end_minute = [int(t) for t in end_row.split(':')]
 
-      #SENDING the message at 10am
-      try:
-        # time sending the message
-        time1 = str(int(time.time()))
-        time_sent = str(datetime.fromtimestamp(int(time1)))
+      # For demonstration purposes, morning message sent 1 minute after start, evening message sent 30 minutes before end time
+      # this will be modified later
+      #the following is just for demo purposes:
+      if start_minute == 59:
+        morn_hour = start_hour + 1
+        morn_min = 0
+      else:
+        morn_hour = start_hour
+        morn_min = start_minute + 1
+      if end_minute >= 30:
+        ev_hour = end_hour
+        ev_min = end_minute - 30
+      else:
+        ev_hour = end_hour - 1
+        ev_min = 30 + end_minute
+    except Exception as e:
+      print(e)
+    finally:
 
-        # items needed in url
-        pre_empathid = '999|' + time1
+      con.close()
 
-        phone_url = 'http://191.168.0.106:2226'
-        server_url = 'http://191.168.0.107/ema/ema.php'
-        androidid = 'db7d3cdb88e1a62a'
-        alarm = 'true'
+      schedule_evts = [(timedelta(hours=morn_hour, minutes=morn_min),'999'),(timedelta(hours=ev_hour, minutes=ev_min),'998')] #(hour, event_id)
 
-        url_dict = {
-          'id': '1',#CHANGE THIS LATER
-          'c': 'startsurvey',
-          'suid': '999',
-          'server': server_url,
-          'androidid': androidid,
-          'empathid': pre_empathid,
-          'alarm': alarm
-        }
-        q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
-        url = phone_url + '/?q=' + q_dict_string
+      start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+      evt_count = 0
+
+      #check where you are relative the interval of time
+      for delta, _ in schedule_evts:
+        if start_today + delta < datetime.now():
+          evt_count +=1
+        else:
+          break
+
+      while True:
+        idx = evt_count%len(schedule_evts)
+        delta, event_id = schedule_evts[idx]
+        next_evt_time = delta + datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        now = datetime.now()
+
+        if next_evt_time < now:
+          next_evt_time += timedelta(days=1)
+
+        time.sleep((next_evt_time -now).total_seconds())
+
+        #SENDING the message at 10am
         try:
-          send = urllib.request.urlopen(url)
-        except http.client.BadStatusLine:
-          pass
+          # time sending the message
+          time1 = str(int(time.time()))
+          time_sent = str(datetime.fromtimestamp(int(time1)))
+
+          # items needed in url
+          pre_empathid = '999|' + time1
+
+          phone_url = 'http://191.168.0.106:2226'
+          server_url = 'http://191.168.0.107/ema/ema.php'
+          androidid = 'db7d3cdb88e1a62a'
+          alarm = 'true'
+
+          url_dict = {
+            'id': '1',#CHANGE THIS LATER
+            'c': 'startsurvey',
+            'suid': event_id,
+            'server': server_url,
+            'androidid': androidid,
+            'empathid': pre_empathid,
+            'alarm': alarm
+          }
+          q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
+          url = phone_url + '/?q=' + q_dict_string
+          try:
+            send = urllib.request.urlopen(url)
+          except http.client.BadStatusLine:
+            pass
 
 
-        #upload morning message has been sent to reward_data
-        db = pymysql.connect('localhost', 'root', '', 'ema')
-        cursor = db.cursor()
+          #upload morning message has been sent to reward_data
+          db = pymysql.connect('localhost', 'root', '', 'ema')
+          cursor = db.cursor()
 
-        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
-                                 VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-                       (pre_empathid, time_sent, '999', 'NA', -1.0, 0)
-        # insert the data to the reward_data table
-        try:
-          cursor.execute(insert_query)
-          db.commit()
+          insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
+                                   VALUES ('%s','%s','%s','%s', '%s','%s')" % \
+                         (pre_empathid, time_sent, event_id, 'NA', -1.0, 0)
+
+          # insert the data to the reward_data table
+          try:
+            cursor.execute(insert_query)
+            db.commit()
+          except:
+            db.rollback()
+
+          db.close()
+
         except:
-          db.rollback()
-
-        db.close()
-
-      except:
-        err = 'Webbrowser Error'
+          err = 'Webbrowser Error'
 
 
+        evt_count += 1
 
 
 
