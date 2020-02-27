@@ -452,7 +452,7 @@ class Recommender:
 
       table_name = 'RESIDENTS_DATA'
       #select the latest deploymnet by ordering table by created date
-      cursorObj.execute("SELECT * FROM " + table_name + " ORDER BY created_date ASC LIMIT 1")
+      cursorObj.execute("SELECT * FROM " + table_name + " ORDER BY created_date DESC LIMIT 1")
       start_row, end_row = cursorObj.fetchall()[0][11:13] # extract start time and end time
       start_hour, start_minute = [int(t) for t in start_row.split(':')]
       end_hour, end_minute = [int(t) for t in end_row.split(':')]
