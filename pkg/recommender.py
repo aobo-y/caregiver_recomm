@@ -442,6 +442,8 @@ class Recommender:
     '''
     Send the morning message at 10 am
     '''
+    time.sleep(180)
+
     next_morning = ''
     #Default message time
     morn_hour = 10
@@ -504,7 +506,12 @@ class Recommender:
         if next_evt_time < now:
           next_evt_time += timedelta(days=1)
 
+        next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
+        log(f'Sleep till next schedule event: {next_evt_time_str}')
+
         time.sleep((next_evt_time -now).total_seconds())
+
+        log(f'Send schedule event: {next_evt_time_str}')
 
         #SENDING the message at 10am
         try:
