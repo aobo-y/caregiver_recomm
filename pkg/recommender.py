@@ -22,6 +22,7 @@ ACTIONS = [19, 20, 21]
 #Set poll time for each question
 ACTIONDICT = {19:120, 20:120, 21:120}
 
+
 class ServerModelAdpator:
   def __init__(self, client_id=0, url='http://localhost:8000/'):
     self.proxy = xmlrpc.client.ServerProxy(url, allow_none=True)
@@ -202,6 +203,7 @@ class Recommender:
     #send the blank message
     #do not ring the phone for this message (false)
     empty_message = call_ema('1','995','false')
+
     return reward
 
   def _send_action(self, speaker_id, action_idx):
@@ -360,6 +362,4 @@ class Recommender:
         log('Send scheduled action error:', error)
 
       evt_count += 1
-
-
 

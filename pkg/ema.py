@@ -79,8 +79,6 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
     db = get_conn()
     cursor = db.cursor()
 
-
-
     var_name_code = str(action_idx + 1)
     var_name_code = '0' * (3 - len(var_name_code)) + var_name_code
 
@@ -104,6 +102,7 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
         end_time = time.time()
         # change time to date time format
         time_received = str(datetime.datetime.fromtimestamp(int(end_time)))
+
         update_query = ("UPDATE reward_data SET TimeReceived='%s', Response='%s' WHERE empathid ='%s'" % (time_received, answer,empathid))
 
         try:
