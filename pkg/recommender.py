@@ -2,28 +2,25 @@ import threading
 from threading import Thread
 import time
 from datetime import datetime, timedelta
-import webbrowser
 import urllib.request
 import http
 import urllib
 import xmlrpc.client
-
-import numpy as np
-import pymysql
 import urllib.parse
+import json
+import sqlite3
+import pymysql
+import numpy as np
+
 from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
-import json
+from .log import log
+from .ema import call_ema, poll_ema, get_conn
 
-
-import sqlite3
-
-ACTIONS = [0, 1, 2]
-
-def log(*args):
-  time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-  print('[RECOMM]', f'{time}    ', *args)
+ACTIONS = [19, 20, 21]
+#Set poll time for each question
+ACTIONDICT = {19:120, 20:120, 21:120}
 
 class ServerModelAdpator:
   def __init__(self, client_id=0, url='http://localhost:8000/'):
@@ -132,276 +129,123 @@ class Recommender:
     self.thread = thread
 
   def _process_evt(self, speaker_id, evt):
-    self.stats.refresh_vct()
-    ctx = np.concatenate([evt, self.stats.vct])
+    try:
+      self.stats.refresh_vct()
+      ctx = np.concatenate([evt, self.stats.vct])
 
-    action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
+      action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
 
-    if action_idx is None:
-      log('model gives no action')
-      return
+      if action_idx is None:
+        log('model gives no action')
+        return
 
-    log('model gives action', action_idx)
-    self.last_action_time = datetime.now()
+      log('model gives action', action_idx)
+      self.last_action_time = datetime.now()
 
-    action = ACTIONS[action_idx]
-    err, empathid = self._send_action(speaker_id, action)
+      empathid = self._send_action(speaker_id, action_idx)
 
-    if err:
-      log('send action error:', err)
-      return
-    elif not empathid:
-      log('no empathid, action not send')
-      return
+      if not empathid:
+        log('no empathid, action not send')
+        return
 
-    log('action sent #id', empathid)
+      log('action sent #id', empathid)
 
-    # if send recommendation successfully
-    err, reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
-    if err:
-      log('retrieve reward error:', err)
-      return
+      # if send recommendation successfully
+      reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
+      if reward is None:
+        log('retrieve no reward for #id:', empathid)
+        return
 
-    self.record_data({
-      'event_vct': evt.tolist(),
-      'stats_vct': self.stats.vct.tolist(),
-      'action': action,
-      'reward': reward,
-      'action_ucbs': ucbs
-    })
+      self.record_data({
+        'event_vct': evt.tolist(),
+        'stats_vct': self.stats.vct.tolist(),
+        'action': action_idx,
+        'reward': reward,
+        'action_ucbs': ucbs
+      })
 
-    log('reward retrieved', reward)
-    self.model.update(ctx, action_idx, reward)
+      log('reward retrieved', reward)
+      self.model.update(ctx, action_idx, reward)
 
-    # update stats
-    self.stats.update(action_idx)
+      # update stats
+      self.stats.update(action_idx)
+
+    except Exception as err:
+      log('Event processing error:', err)
 
   def get_reward(self, empathid, ctx, action_idx, speaker_id):
     if self.mock:
-      return None, self.mock_scenario.insight(0, ctx, action_idx)[0]
+      return self.mock_scenario.insight(0, ctx, action_idx)[0]
 
-    # connect to database
-    db = pymysql.connect('localhost', 'root', '', 'ema')
-    cursor = db.cursor()
-    current_time = time.time()
-    err = None
+    recomm_id = ACTIONS[action_idx]
+    #dynamic poll time for each survey
+    poll_time = ACTIONDICT[ACTIONS[action_idx]]
+    reward = None
 
-    time_count = 0
-    reward = -1.0 #if no reward is received
+    #poll for sent survey from _send_action()
+    recomm_ans = poll_ema(speaker_id, empathid, action_idx, poll_time)
 
-    # determine variablename =
-    if ((action_idx + 1) >= 0) and ((action_idx + 1) <= 9):
-      var_name_code = '00'+str(action_idx+1)
-    elif ((action_idx + 1) >= 10) and ((action_idx + 1) <= 99):
-      var_name_code = '0'+str(action_idx+1)
-    elif ((action_idx + 1) >= 100) and ((action_idx + 1) <= 999):
-      var_name_code = str(action_idx+1)
-
-    # recieving reward from user
-    while time.time() - current_time < 300:
-      query = "SELECT answer FROM ema_data where primkey = '" + str(speaker_id) + ":" + \
-        empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
-      data = cursor.execute(query)
-
-      # if the user took some action
-      if data:
-        answer = str(cursor.fetchall()).split("'")[1]
-
-        # time reward is received
-        time1 = str(int(time.time()))
-        # change time to date time format
-        time_received = str(datetime.fromtimestamp(int(time1)))
-
-
-        # if NO return 0
-        if answer == '2':
-          reward = 0.0
-          time_count += 1
-        # if YES return 1
-        if answer == '1':
-          reward = 1.0
-          time_count += 1
-
-        # prepare query to update into recommederdata table with response
-        update_query = ("UPDATE reward_data SET TimeReceived='%s', Response='%s' WHERE empathid ='%s'" % (time_received,reward,empathid))
-        # insert the data to the reward_data table
-        try:
-          cursor.execute(update_query)
-          db.commit()
-        except:
-          db.rollback()
-
+    send_count = 1 #already sent once in _send_action()
+    while send_count < 3:
+      # if NO return 0
+      if recomm_ans == 0.0:
+        reward = 0.0
         break
+      if recomm_ans == 1.0:
+        reward = 1.0
+        break
+      else:
+        send_recomm_id = call_ema(speaker_id, recomm_id)
+        recomm_ans = poll_ema(speaker_id, send_recomm_id, action_idx,poll_time)
+        send_count+=1
 
-      time.sleep(5)
-      # new a thread created
-      # if threading.current_thread() != self.thread:
-      #   return None, None
+    #send the blank message
+    #do not ring the phone for this message (false)
+    empty_message = call_ema('1','995','false')
+    return reward
 
-    if time_count == 0:
-      err = 'Timeout Error'
-
-    # close database
-    db.close()
-    return err, reward
-
-  def _send_action(self, speaker_id, action):
+  def _send_action(self, speaker_id, action_idx):
     '''
     Send the chosen action to the downstream
     return err if any
     '''
 
     if self.mock:
-      return None, 'mock_id'
+      return 'mock_id'
 
-    err = None
-    empathid = None
-    time_received = 'NA'
-    response = -1.0
-    answer = ''
+    req_id = None
+    pre_ans = None
 
+    # send pre survey
+    send_count = 0
+    #send the question 3 times (if no response) for x duration based on survey id
+    while send_count <3:
+      #Send prequestion
+      pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
+      #prequestion response
+      pre_ans = poll_ema(speaker_id, pre_req_id, -1,120) # hardcoded survey id and 2 minutes polling
 
-    # start time
-    current_time = time.time()
-    last_time = 0
-    struc_current_time = time.localtime(current_time)
+      # send real recommendation if response is no
+      if pre_ans == 0.0:
+        # this should be 19 through 21
+        recomm_id = ACTIONS[action_idx]
 
-    # the time must be between 8:00am and 12:00pm
-    if struc_current_time[3] < 25 and struc_current_time[3] > 8:
-      last_time = current_time
+        req_id = call_ema(speaker_id, recomm_id)
+        break
+      if pre_ans == 1.0:
+        break
 
-      action = str(action)
+      send_count+=1
 
-      # this should be 19 through 21
-      survey_id = {'0': '19', '1': '20', '2': '21'}
+    #Only if no response for x duration, send the empty message
+    # or the response is yes
+    if send_count == 3 or pre_ans !=0.0:
+      #do not ring the phone for this message (false)
+      empty_message = call_ema('1','995','false')
 
-      # survey_id = str(action + 19)  # each action plus 19
-      # add a dictionary
+    #return the empath id
+    return req_id
 
-      # time sending the prequestion
-      time1 = str(int(time.time()))
-      # date and time format of the time the prequestion is sent
-      time_sent = str(datetime.fromtimestamp(int(time1)))
-
-      # items needed in url
-      pre_empathid = '999|' + time1
-
-      phone_url = 'http://191.168.0.106:2226'
-      server_url = 'http://191.168.0.107/ema/ema.php'
-      androidid = 'db7d3cdb88e1a62a'
-      alarm = 'true'
-
-      # sending action to phone
-      try:
-        # send prequestion 22
-
-        url_dict = {
-          'id': str(speaker_id),
-          'c':'startsurvey',
-          'suid': '22',
-          'server': server_url,
-          'androidid': androidid,
-          'empathid': pre_empathid,
-          'alarm': alarm
-        }
-        q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
-        url = phone_url + '/?q=' + q_dict_string
-
-        send = urllib.request.urlopen(url)
-
-        # connect to database
-        db = pymysql.connect('localhost', 'root', '', 'ema')
-        cursor = db.cursor()
-
-        while time.time() - current_time < 300:
-          query = "SELECT answer FROM ema_data where primkey = '" + url_dict['id'] + ":" + \
-            pre_empathid + "' AND variablename = 'R000Q01'"
-          data = cursor.execute(query)
-
-          if data:
-            # time prequestion is received
-            time2 = str(int(time.time()))
-            # change time to date time format
-            time_received = str(datetime.fromtimestamp(int(time2)))
-            break
-
-          time.sleep(5)
-
-        db.close()
-
-        if data:
-          answer = str(cursor.fetchall()).split("'")[1]
-
-          # if answer is yes '1' stop
-          if answer == '1':
-            response =1.0
-          # if answer is no '2' send recommendation
-          if answer == '2':
-            response =0.0
-
-            # time sending the recommendation
-            time2 = str(int(time.time()))
-            # date and time format of the time the recommendation is sent
-            time_sent_recomm = str(datetime.fromtimestamp(int(time2)))
-
-            #empathid of the recommendation
-            empathid = '999|' + time2
-
-            url_dict = {
-              'id': str(speaker_id),
-              'c': 'startsurvey',
-              'suid': survey_id[action],
-              'server': server_url,
-              'androidid': androidid,
-              'empathid': empathid,
-              'alarm': alarm
-            }
-
-            q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
-            url = phone_url + '/?q=' + q_dict_string
-
-            send = urllib.request.urlopen(url)
-
-        dbr = pymysql.connect('localhost', 'root', '', 'ema')
-        cursor2 = dbr.cursor()
-
-        #inserting prequestion to reward_data
-        # prepare query to insert into reward_data table
-        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
-             VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-                       (pre_empathid, time_sent, '22', time_received, response,0)
-        # insert the data to the reward_table
-        try:
-          cursor2.execute(insert_query)
-          dbr.commit()
-        except:
-          dbr.rollback()
-
-        dbr.close()
-
-        #if recommendation is sent, insert data to reward_data table
-        if answer =='2':
-          db2 = pymysql.connect('localhost', 'root', '', 'ema')
-          cursor3 = db2.cursor()
-
-          # inserting prequestion to reward_data
-          # prepare query to insert into reward_data table
-          insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
-                         VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-                         (empathid, time_sent_recomm,survey_id[action] , 'NA', -1.0,0)
-          # insert the data to the reward_data table
-          try:
-            cursor3.execute(insert_query)
-            db2.commit()
-          except:
-            db2.rollback()
-
-          db2.close()
-
-      except Exception as error:
-        log('Send action error:', error)
-
-    return err, empathid
 
   def record_data(self, data):
     if self.mock:
@@ -425,12 +269,15 @@ class Recommender:
                    (time, event_vct, stats_vct, action,reward, action_ucbs,0)
     # insert the data
     try:
-      storing_cursor.execute(insert_query)
-      storing_db.commit()
-    except:
-      storing_db.rollback()
-
-    storing_db.close()
+      db = get_conn()
+      cursor = db.cursor()
+      cursor.execute(insert_query)
+      db.commit()
+    except Exception as err:
+      log('Record recommendation data error:', err)
+      db.rollback()
+    finally:
+      db.close()
 
   def _schedule_evt(self):
     '''
@@ -502,60 +349,17 @@ class Recommender:
       next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
       log(f'Sleep till next schedule event: {next_evt_time_str}')
 
-      time.sleep((next_evt_time -now).total_seconds())
-
-      log(f'Send schedule event: {next_evt_time_str}')
+      time.sleep((next_evt_time - now).total_seconds())
 
       #SENDING the message at 10am
       try:
-        # time sending the message
-        time1 = str(int(time.time()))
-        time_sent = str(datetime.fromtimestamp(int(time1)))
-
-        # items needed in url
-        pre_empathid = '999|' + time1
-
-        phone_url = 'http://191.168.0.106:2226'
-        server_url = 'http://191.168.0.107/ema/ema.php'
-        androidid = 'db7d3cdb88e1a62a'
-        alarm = 'true'
-
-        url_dict = {
-          'id': '1',#CHANGE THIS LATER
-          'c': 'startsurvey',
-          'suid': event_id,
-          'server': server_url,
-          'androidid': androidid,
-          'empathid': pre_empathid,
-          'alarm': alarm
-        }
-        q_dict_string = urllib.parse.quote(json.dumps(url_dict), safe=':={}/')  # encoding url quotes become %22
-        url = phone_url + '/?q=' + q_dict_string
-
-        send = urllib.request.urlopen(url)
-
-        #upload morning message has been sent to reward_data
-        db = pymysql.connect('localhost', 'root', '', 'ema')
-        cursor = db.cursor()
-
-        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
-                                  VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-                        (pre_empathid, time_sent, event_id, 'NA', -1.0, 0)
-
-        # insert the data to the reward_data table
-        try:
-          cursor.execute(insert_query)
-          db.commit()
-        except:
-          db.rollback()
-
-        db.close()
+        req_id = call_ema(1, event_id)
+        log(f'Send schedule event: {req_id}')
 
       except Exception as error:
         log('Send scheduled action error:', error)
 
       evt_count += 1
-
 
 
 
