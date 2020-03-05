@@ -9,7 +9,7 @@ import xmlrpc.client
 import urllib.parse
 import json
 import sqlite3
-
+import pymysql
 import numpy as np
 
 from .alg import LinUCB
@@ -19,6 +19,9 @@ from .log import log
 from .ema import call_ema, poll_ema, get_conn
 
 ACTIONS = [19, 20, 21]
+#Set poll time for each question
+ACTIONDICT = {19:120, 20:120, 21:120}
+
 
 class ServerModelAdpator:
   def __init__(self, client_id=0, url='http://localhost:8000/'):
@@ -175,14 +178,31 @@ class Recommender:
     if self.mock:
       return self.mock_scenario.insight(0, ctx, action_idx)[0]
 
-      recomm_ans = poll_ema(speaker_id, empathid, action_idx)
+    recomm_id = ACTIONS[action_idx]
+    #dynamic poll time for each survey
+    poll_time = ACTIONDICT[ACTIONS[action_idx]]
+    reward = None
 
+    #poll for sent survey from _send_action()
+    recomm_ans = poll_ema(speaker_id, empathid, action_idx, poll_time)
+
+    send_count = 1 #already sent once in _send_action()
+    while send_count < 3:
       # if NO return 0
-      if recomm_ans == '2':
+      if recomm_ans == 0.0:
         reward = 0.0
-      # if YES return 1
-      if recomm_ans == '1':
+        break
+      if recomm_ans == 1.0:
         reward = 1.0
+        break
+      else:
+        send_recomm_id = call_ema(speaker_id, recomm_id)
+        recomm_ans = poll_ema(speaker_id, send_recomm_id, action_idx,poll_time)
+        send_count+=1
+
+    #send the blank message
+    #do not ring the phone for this message (false)
+    empty_message = call_ema('1','995','false')
 
     return reward
 
@@ -196,18 +216,36 @@ class Recommender:
       return 'mock_id'
 
     req_id = None
+    pre_ans = None
 
     # send pre survey
-    pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
-    pre_ans = poll_ema(speaker_id, pre_req_id, -1) # hardcoded survey id
+    send_count = 0
+    #send the question 3 times (if no response) for x duration based on survey id
+    while send_count <3:
+      #Send prequestion
+      pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
+      #prequestion response
+      pre_ans = poll_ema(speaker_id, pre_req_id, -1,120) # hardcoded survey id and 2 minutes polling
 
-    # send real recommendation
-    if pre_ans == '2':
-      # this should be 19 through 21
-      recomm_id = ACTIONS[action_idx]
+      # send real recommendation if response is no
+      if pre_ans == 0.0:
+        # this should be 19 through 21
+        recomm_id = ACTIONS[action_idx]
 
-      req_id = call_ema(speaker_id, recomm_id)
+        req_id = call_ema(speaker_id, recomm_id)
+        break
+      if pre_ans == 1.0:
+        break
 
+      send_count+=1
+
+    #Only if no response for x duration, send the empty message
+    # or the response is yes
+    if send_count == 3 or pre_ans !=0.0:
+      #do not ring the phone for this message (false)
+      empty_message = call_ema('1','995','false')
+
+    #return the empath id
     return req_id
 
 
@@ -324,3 +362,4 @@ class Recommender:
         log('Send scheduled action error:', error)
 
       evt_count += 1
+

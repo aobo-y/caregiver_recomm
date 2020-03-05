@@ -1,5 +1,9 @@
 import pymysql
 import time
+import datetime
+import urllib
+import json
+import http
 
 from .log import log
 
@@ -8,22 +12,20 @@ def get_conn():
   return pymysql.connect('localhost', 'root', '', 'ema')
 
 # send request to ema and poll results
-def call_ema(id, suid):
+def call_ema(id, suid, alarm='true'):
   err = None
   empathid = None
   time_received = 'NA'
   response = -1.0
-
   # the time must be between 8:00 am and 12:00 am
-  if datetime.now().hour < 8:
-    return
 
-  action = str(action)
+  if datetime.datetime.now().hour < 8:
+    return
 
   # time sending the prequestion
   start_time = time.time()
   # date and time format of the time the prequestion is sent
-  time_sent = str(datetime.fromtimestamp(int(start_time)))
+  time_sent = str(datetime.datetime.fromtimestamp(int(start_time)))
 
   # items needed in url
   empathid = '999|' + str(int(time.time()))
@@ -31,7 +33,7 @@ def call_ema(id, suid):
   phone_url = 'http://191.168.0.106:2226'
   server_url = 'http://191.168.0.107/ema/ema.php'
   androidid = 'db7d3cdb88e1a62a'
-  alarm = 'true'
+  alarm = alarm
 
   # sending action to phone
   url_dict = {
@@ -90,10 +92,16 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
       if data:
         answer = str(cursor.fetchall()).split("'")[1]
 
+        if answer == '1':
+          answer = 1.0
+        # if answer is no '2' send recommendation
+        if answer == '2':
+          answer = 0.0
+
         # time prequestion is received
         end_time = time.time()
         # change time to date time format
-        time_received = str(datetime.fromtimestamp(int(end_time)))
+        time_received = str(datetime.datetime.fromtimestamp(int(end_time)))
 
         update_query = ("UPDATE reward_data SET TimeReceived='%s', Response='%s' WHERE empathid ='%s'" % (time_received, answer,empathid))
 
