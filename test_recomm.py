@@ -6,8 +6,8 @@ from pkg.recommender import Recommender
 
 D_EVT = 5 # dimension of event
 
-def main(server_config=None):
-  recommender = Recommender(mock=True, server_config=server_config)
+def main(server_config=None, mode='default'):
+  recommender = Recommender(mock=True, server_config=server_config, mode=mode)
 
   while True:
       evt = np.random.randn(D_EVT)
@@ -18,10 +18,11 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument('--id', type=int)
   parser.add_argument('--server')
+  parser.add_argument('--mode', default='default')
   args = parser.parse_args()
 
   server_config = None
   if args.id is not None and args.server:
     server_config = {'client_id': args.id, 'url': args.server}
 
-  main(server_config=server_config)
+  main(server_config=server_config, mode=args.mode)

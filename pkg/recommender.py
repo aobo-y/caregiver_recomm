@@ -85,10 +85,7 @@ class RemoteLocalBlender:
 temp_server_config = {'client_id': 0, 'url': 'http://hcdm4.cs.virginia.edu:8989'}
 
 class Recommender:
-  def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config):
-
-
-
+  def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default'):
     ctx_size = evt_dim + len(ACTIONS)
     self.action_cooldown = timedelta(seconds=300) # 5 min
 
@@ -98,6 +95,7 @@ class Recommender:
 
     self.stats = Stats(len(ACTIONS), expire_after=1800)
 
+    self.mode = mode
     self.mock = mock
     if self.mock:
       self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
@@ -126,50 +124,58 @@ class Recommender:
     thread = Thread(target=self._process_evt, args=(speaker_id, evt))
     thread.start()
 
-
     self.thread = thread
 
   def _process_evt(self, speaker_id, evt):
     try:
-      self.stats.refresh_vct()
-      ctx = np.concatenate([evt, self.stats.vct])
+      if self.mode == 'mood_checking':
+        self.last_action_time = datetime.now()
+        empathid = call_ema(speaker_id, '995') # dynamic message for moode checking
+        if not empathid:
+          log('no empathid, mood checking survey not send')
 
-      action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
+        log('mood checking survey sent #id', empathid)
 
-      if action_idx is None:
-        log('model gives no action')
-        return
+      else:
+        self.stats.refresh_vct()
+        ctx = np.concatenate([evt, self.stats.vct])
 
-      log('model gives action', action_idx)
-      self.last_action_time = datetime.now()
+        action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
 
-      empathid = self._send_action(speaker_id, action_idx)
+        if action_idx is None:
+          log('model gives no action')
+          return
 
-      if not empathid:
-        log('no empathid, action not send')
-        return
+        log('model gives action', action_idx)
+        self.last_action_time = datetime.now()
 
-      log('action sent #id', empathid)
+        empathid = self._send_action(speaker_id, action_idx)
 
-      # if send recommendation successfully
-      reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
-      if reward is None:
-        log('retrieve no reward for #id:', empathid)
-        return
+        if not empathid:
+          log('no empathid, action not send')
+          return
 
-      self.record_data({
-        'event_vct': evt.tolist(),
-        'stats_vct': self.stats.vct.tolist(),
-        'action': action_idx,
-        'reward': reward,
-        'action_ucbs': ucbs
-      })
+        log('action sent #id', empathid)
 
-      log('reward retrieved', reward)
-      self.model.update(ctx, action_idx, reward)
+        # if send recommendation successfully
+        reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
+        if reward is None:
+          log('retrieve no reward for #id:', empathid)
+          return
 
-      # update stats
-      self.stats.update(action_idx)
+        self.record_data({
+          'event_vct': evt.tolist(),
+          'stats_vct': self.stats.vct.tolist(),
+          'action': action_idx,
+          'reward': reward,
+          'action_ucbs': ucbs
+        })
+
+        log('reward retrieved', reward)
+        self.model.update(ctx, action_idx, reward)
+
+        # update stats
+        self.stats.update(action_idx)
 
     except Exception as err:
       log('Event processing error:', err)
@@ -202,7 +208,7 @@ class Recommender:
 
     #send the blank message
     #do not ring the phone for this message (false)
-    empty_message = call_ema('1','995','false')
+    empty_message = call_ema('1', '995', 'false')
 
     return reward
 
@@ -237,7 +243,7 @@ class Recommender:
       if pre_ans == 1.0:
         break
 
-      send_count+=1
+      send_count += 1
 
     #Only if no response for x duration, send the empty message
     # or the response is yes
@@ -296,6 +302,7 @@ class Recommender:
 
     #get start time from deployment
     try:
+      con = None
       con = sqlite3.connect('C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
       cursorObj =  con.cursor()
 
@@ -324,7 +331,8 @@ class Recommender:
     except Exception as e:
       log('Read SQLite DB error:', e)
     finally:
-      con.close()
+      if con:
+        con.close()
 
     schedule_evts = [(timedelta(hours=morn_hour, minutes=morn_min),'999'),(timedelta(hours=ev_hour, minutes=ev_min),'998')] #(hour, event_id)
 
