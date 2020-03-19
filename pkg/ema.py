@@ -4,15 +4,19 @@ import datetime
 import urllib
 import json
 import http
+import os
+import re
 
 from .log import log
+
+DIR_PATH = os.path.dirname(__file__)
 
 # get a mysql db connection
 def get_conn():
   return pymysql.connect('localhost', 'root', '', 'ema')
 
 # send request to ema and poll results
-def call_ema(id, suid, alarm='true'):
+def call_ema(id, suid='', message='', alarm='true'):
   err = None
   empathid = None
   time_received = 'NA'
@@ -21,6 +25,9 @@ def call_ema(id, suid, alarm='true'):
 
   if datetime.datetime.now().hour < 8:
     return
+
+  if message:
+    suid = setup_message(message)
 
   # time sending the prequestion
   start_time = time.time()
@@ -119,3 +126,26 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
     db.close() # ensure db closed, exception is raised to upper layer to handle
 
   return answer
+
+
+def setup_message(message, type='binary'):
+  suid = '22'
+  template_path = os.path.join(DIR_PATH, 'message_templates', f'{type}.bin')
+  with open(template_path, 'rb') as f:
+    template = f.read().decode()
+
+  ema_survey = re.sub(r's:(\d+):(\[\[MESSAGE_PLACEHOLDEER\]\])', r's:\1:' + message, template)
+  buf = zlib.compress(ema_survey.encode())
+
+  try:
+    conn = get_conn()
+    with conn.cursor() as cursor:
+      # Create a new record
+      sql = "UPDATE ema_context SET variables='%s' WHERE suid ='%s'"
+      cursor.execute(sql, (buf, suid))
+
+    conn.commit()
+  finally:
+    conn.close()
+
+  return suid

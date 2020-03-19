@@ -229,7 +229,9 @@ class Recommender:
     #send the question 3 times (if no response) for x duration based on survey id
     while send_count <3:
       #Send prequestion
-      pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
+      # pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
+      pre_req_id = call_ema(speaker_id, message='Custom Message') # hardcoded survey id
+
       #prequestion response
       pre_ans = poll_ema(speaker_id, pre_req_id, -1,120) # hardcoded survey id and 2 minutes polling
 
