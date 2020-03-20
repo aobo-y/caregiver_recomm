@@ -134,14 +134,14 @@ def setup_message(message, type='binary'):
   with open(template_path, 'rb') as f:
     template = f.read().decode()
 
-  ema_survey = re.sub(r's:(\d+):(\[\[MESSAGE_PLACEHOLDEER\]\])', r's:\1:' + message, template)
+  ema_survey = re.sub(r's:(\d+):(\[\[MESSAGE_PLACEHOLDEER\]\])', r's:' + len(message.encode()) + ':' + message, template)
   buf = zlib.compress(ema_survey.encode())
 
   try:
     conn = get_conn()
     with conn.cursor() as cursor:
       # Create a new record
-      sql = "UPDATE ema_context SET variables='%s' WHERE suid ='%s'"
+      sql = "UPDATE ema_context SET variables = %s WHERE suid = %s"
       cursor.execute(sql, (buf, suid))
 
     conn.commit()
