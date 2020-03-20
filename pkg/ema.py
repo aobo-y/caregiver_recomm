@@ -138,8 +138,7 @@ def setup_message(message, type='binary'):
   with open(template_path, 'rb') as f:
     template = f.read().decode()
 
-
-  ema_survey = re.sub(r's:(\d+):(\[\[MESSAGE_PLACEHOLDEER\]\])', r's:' + str(len(message.encode())) + ':' + message, template)
+  ema_survey = re.sub(r's:\d+:"\[\[MESSAGE_PLACEHOLDEER\]\]"', r's:' + str(len(message.encode())) + ':"' + message + '"', template)
   buf = zlib.compress(ema_survey.encode())
 
   try:
