@@ -6,6 +6,7 @@ import json
 import http
 import os
 import re
+import zlib
 
 from .log import log
 
@@ -23,10 +24,12 @@ def call_ema(id, suid='', message='', alarm='true'):
   response = -1.0
   # the time must be between 8:00 am and 12:00 am
 
+  #only works after 8 oclock
   if datetime.datetime.now().hour < 8:
     return
 
   if message:
+
     suid = setup_message(message)
 
   # time sending the prequestion
@@ -131,21 +134,23 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
 def setup_message(message, type='binary'):
   suid = '22'
   template_path = os.path.join(DIR_PATH, 'message_templates', f'{type}.bin')
+
   with open(template_path, 'rb') as f:
     template = f.read().decode()
 
-  ema_survey = re.sub(r's:(\d+):(\[\[MESSAGE_PLACEHOLDEER\]\])', r's:' + len(message.encode()) + ':' + message, template)
+
+  ema_survey = re.sub(r's:(\d+):(\[\[MESSAGE_PLACEHOLDEER\]\])', r's:' + str(len(message.encode())) + ':' + message, template)
   buf = zlib.compress(ema_survey.encode())
 
   try:
     conn = get_conn()
     with conn.cursor() as cursor:
       # Create a new record
-      sql = "UPDATE ema_context SET variables = %s WHERE suid = %s"
+      sql = "UPDATE ema_context SET variables =%s WHERE suid = %s"
       cursor.execute(sql, (buf, suid))
-
     conn.commit()
   finally:
+
     conn.close()
 
   return suid

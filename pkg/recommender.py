@@ -208,7 +208,7 @@ class Recommender:
 
     #send the blank message
     #do not ring the phone for this message (false)
-    empty_message = call_ema('1', '995', 'false')
+    empty_message = call_ema('1', '995', alarm='false')
 
     return reward
 
@@ -230,6 +230,7 @@ class Recommender:
     while send_count <3:
       #Send prequestion
       # pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
+
       pre_req_id = call_ema(speaker_id, message='Custom Message') # hardcoded survey id
 
       #prequestion response
@@ -251,7 +252,7 @@ class Recommender:
     # or the response is yes
     if send_count == 3 or pre_ans !=0.0:
       #do not ring the phone for this message (false)
-      empty_message = call_ema('1','995','false')
+      empty_message = call_ema('1','995',alarm='false')
 
     #return the empath id
     return req_id
