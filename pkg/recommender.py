@@ -102,6 +102,7 @@ class Recommender:
 
         # initialize _schedule_evt()
         schedule_thread = Thread(target=self._schedule_evt)
+        schedule_thread.daemon = True
         schedule_thread.start()
         self.schedule_thread = schedule_thread
 
@@ -118,6 +119,7 @@ class Recommender:
             evt = np.array(evt)
 
         thread = Thread(target=self._process_evt, args=(speaker_id, evt))
+        thread.daemon = True
         thread.start()
 
         self.thread = thread
