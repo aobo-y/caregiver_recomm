@@ -233,6 +233,7 @@ class Recommender:
 
             # hardcoded survey id
             pre_req_id = call_ema(speaker_id, message='Custom Message')
+            #pre_req_id = call_ema(speaker_id, 22)
 
             # prequestion response
             # hardcoded survey id and 2 minutes polling

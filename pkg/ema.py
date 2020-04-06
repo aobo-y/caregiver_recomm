@@ -138,25 +138,52 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
 
 
 def setup_message(message, type='binary'):
-    suid = '22'
+    # suid = '27'
+    #
+    # template_path = os.path.join(DIR_PATH, 'message_templates', f'{type}.bin')
+    #
+    # with open(template_path, 'rb') as f:
+    #     template = f.read().decode()
+    #
+    # ema_survey = re.sub(r's:\d+:"\[\[MESSAGE_PLACEHOLDEER\]\]"', r's:' + str(
+    #     len(message.encode())) + ':"' + message + '"', template)
+    # buf = zlib.compress(ema_survey.encode())
+    #
+    # try:
+    #     conn = get_conn()
+    #     with conn.cursor() as cursor:
+    #         # Create a new record
+    #         sql = "UPDATE ema_context SET variables = %s WHERE suid = %s"
+    #         cursor.execute(sql, (buf, suid))
+    #     conn.commit()
+    # finally:
+    #     conn.close()
+    suid = 23
 
-    template_path = os.path.join(DIR_PATH, 'message_templates', f'{type}.bin')
+    #temporary dictionary to match the custom message with the message in promps textfile
+    prompt_dict = {"Custom Message":0, "Custom Message1":1, "Custom Message2":2}
 
-    with open(template_path, 'rb') as f:
-        template = f.read().decode()
+    # read in all caregiver propms
+    all_promps_file = open("caregiverpromps.txt", "r")
+    caregiver_promps = all_promps_file.read().strip().split("\n")
+    # pick the prompt you want
+    prompt = caregiver_promps[prompt_dict[message]]
+    all_promps_file.close()
 
-    ema_survey = re.sub(r's:\d+:"\[\[MESSAGE_PLACEHOLDEER\]\]"', r's:' + str(
-        len(message.encode())) + ':"' + message + '"', template)
-    buf = zlib.compress(ema_survey.encode())
+    #converting prompt to binary
+    binary_prompt = prompt.encode('ascii')
 
+    #change bin file in ema_settings table
     try:
-        conn = get_conn()
-        with conn.cursor() as cursor:
-            # Create a new record
-            sql = "UPDATE ema_context SET variables = %s WHERE suid = %s"
-            cursor.execute(sql, (buf, suid))
-        conn.commit()
+        db = get_conn()
+        cursor = db.cursor()
+        update_query = "UPDATE ema_settings SET value = %s WHERE suid = %s AND object = %s AND name like %s"
+        cursor.execute(update_query,(binary_prompt, '23','6747','question'))
+        db.commit()
+    except Exception as err:
+        log('Failed to update logged ema request:', err)
+        db.rollback()
     finally:
-        conn.close()
+        db.close()
 
     return suid
