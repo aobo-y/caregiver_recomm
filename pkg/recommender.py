@@ -13,9 +13,13 @@ from .stats import Stats
 from .log import log
 from .ema import call_ema, poll_ema, get_conn
 
-ACTIONS = [19, 20, 21]
+#ACTIONS = [19, 20, 21]
 # Set poll time for each question
-ACTIONDICT = {19: 120, 20: 120, 21: 120}
+#ACTIONDICT = {19: 120, 20: 120, 21: 120}
+
+ACTIONS = ['pre-question1', 'custom message1', 'custom message6','custom message7', 'custom message8', 'custom message9']
+
+ACTIONDICT = {'pre-question1': 120, 'custom message1': 120, 'custom message6': 120, 'custom message7': 120,'custom message8':120, 'custom message9':120}
 
 
 class ServerModelAdpator:
@@ -129,7 +133,7 @@ class Recommender:
             if self.mode == 'mood_checking':
                 self.last_action_time = datetime.now()
                 # dynamic message for moode checking
-                empathid = call_ema(speaker_id, '995')
+                empathid, retrieval_object, qtype = call_ema(speaker_id, '995')
                 if not empathid:
                     log('no empathid, mood checking survey not send')
 
@@ -148,7 +152,7 @@ class Recommender:
                 log('model gives action', action_idx)
                 self.last_action_time = datetime.now()
 
-                empathid = self._send_action(speaker_id, action_idx)
+                empathid, retrieval_object, qtype = self._send_action(speaker_id, action_idx)
 
                 if not empathid:
                     log('no empathid, action not send')
@@ -157,7 +161,7 @@ class Recommender:
                 log('action sent #id', empathid)
 
                 # if send recommendation successfully
-                reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
+                reward = self.get_reward(empathid, ctx, action_idx, speaker_id,retrieve_ob=retrieval_object, question_type=qtype)
                 if reward is None:
                     log('retrieve no reward for #id:', empathid)
                     return
@@ -179,17 +183,18 @@ class Recommender:
         except Exception as err:
             log('Event processing error:', err)
 
-    def get_reward(self, empathid, ctx, action_idx, speaker_id):
+    def get_reward(self, empathid, ctx, action_idx, speaker_id, retrieve_ob, question_type):
         if self.mock:
             return self.mock_scenario.insight(0, ctx, action_idx)[0]
-
+        poll_time = 120
         recomm_id = ACTIONS[action_idx]
         # dynamic poll time for each survey
         poll_time = ACTIONDICT[ACTIONS[action_idx]]
         reward = None
 
+
         # poll for sent survey from _send_action()
-        recomm_ans = poll_ema(speaker_id, empathid, action_idx, poll_time)
+        recomm_ans = poll_ema(speaker_id, empathid, action_idx, retrieve_ob, question_type, poll_time)
 
         send_count = 1  # already sent once in _send_action()
         while send_count < 3:
@@ -201,9 +206,9 @@ class Recommender:
                 reward = 1.0
                 break
             else:
-                send_recomm_id = call_ema(speaker_id, recomm_id)
+                send_recomm_id, retrieval_object, qtype = call_ema(speaker_id,message=recomm_id)
                 recomm_ans = poll_ema(
-                    speaker_id, send_recomm_id, action_idx, poll_time)
+                    speaker_id, send_recomm_id, action_idx, retrieve_object, qtype, poll_time)
                 send_count += 1
 
         # send the blank message
@@ -217,6 +222,8 @@ class Recommender:
         Send the chosen action to the downstream
         return err if any
         '''
+        retrieval_object2 = ''
+        qtype2 = ''
 
         if self.mock:
             return 'mock_id'
@@ -229,22 +236,19 @@ class Recommender:
         # send the question 3 times (if no response) for x duration based on survey id
         while send_count < 3:
             # Send prequestion
-            # pre_req_id = call_ema(speaker_id, 22) # hardcoded survey id
-
-            # hardcoded survey id
-            pre_req_id = call_ema(speaker_id, message='Custom Message')
-            #pre_req_id = call_ema(speaker_id, 22)
+            #returns empathid, the polling object (for different types of questions from ema_data), and question type
+            pre_req_id, retrieval_object1, qtype = call_ema(speaker_id, message='custom_slide1') # hardcoded survey id
 
             # prequestion response
             # hardcoded survey id and 2 minutes polling
-            pre_ans = poll_ema(speaker_id, pre_req_id, -1, 120)
+            pre_ans = poll_ema(speaker_id, pre_req_id, -1, retrieval_object1, qtype, 120)
 
             # send real recommendation if response is no
             if pre_ans == 0.0:
-                # this should be 19 through 21
+                # this should be 19 through 21 (not anymore)
                 recomm_id = ACTIONS[action_idx]
 
-                req_id = call_ema(speaker_id, recomm_id)
+                req_id, retrieval_object2, qtype2 = call_ema(speaker_id, message='custom_multiple2')
                 break
             if pre_ans == 1.0:
                 break
@@ -257,8 +261,8 @@ class Recommender:
             # do not ring the phone for this message (false)
             _ = call_ema('1', '995', alarm='false')
 
-        # return the empath id
-        return req_id
+        # return the empath id, retrieval place for specific type of quesiton, and question type
+        return req_id, retrieval_object2, qtype2
 
     def record_data(self, data):
         if self.mock:
@@ -368,7 +372,7 @@ class Recommender:
 
             # SENDING the message at 10am
             try:
-                req_id = call_ema(1, event_id)
+                req_id, retrieval_object, qtype = call_ema(1, event_id)
                 log(f'Send schedule event: {req_id}')
 
             except Exception as error:

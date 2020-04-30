@@ -22,16 +22,16 @@ def get_conn():
 
 def call_ema(id, suid='', message='', alarm='true'):
     empathid = None
-
+    retrieval_object = ''
+    qtype = ''
     # the time must be between 8:00 am and 12:00 am
-    # only works after 8 oclock
+    #only works after 8 oclock
     if datetime.datetime.now().hour < 8:
-        return
+        log('It is before 8 oclock')
+        return ''
 
     if message:
-
-        suid = setup_message(message)
-
+        suid, retrieval_object, qtype = setup_message(message)
     # time sending the prequestion
     start_time = time.time()
     # date and time format of the time the prequestion is sent
@@ -80,33 +80,53 @@ def call_ema(id, suid='', message='', alarm='true'):
     finally:
         db.close()
 
-    return empathid
+    return empathid, retrieval_object, qtype
 
 
-def poll_ema(id, empathid, action_idx, duration=300, freq=5):
+def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, freq=5):
     answer = None
-
     try:
         db = get_conn()
         cursor = db.cursor()
 
-        var_name_code = str(action_idx + 1)
-        var_name_code = '0' * (3 - len(var_name_code)) + var_name_code
-
+        # var_name_code = str(action_idx + 1)
+        # var_name_code = '0' * (3 - len(var_name_code)) + var_name_code
         start_time = time.time()
 
         while time.time() - start_time < duration:
+            # query = "SELECT answer FROM ema_data where primkey = '" + str(id) + ":" + \
+            #     empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
             query = "SELECT answer FROM ema_data where primkey = '" + str(id) + ":" + \
-                empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
+                 empathid + "' AND variablename = '" + retrieve + "'"
             data = cursor.execute(query)
 
             if data:
                 answer = str(cursor.fetchall()).split("'")[1]
 
+                #slide bar type
+                if question_type == 'slide bar':
+                    #if 0-50 then send a recommendation
+                    if int(answer) in range(0,3):
+                        answer = 0.0
+                    else:
+                        answer = 1.0
+                #multiple choice type
+                if question_type == 'multiple choice':
+                    #if first four choices, send a recommendation
+                    if int(answer) in range (1,5):
+                        answer = 0.0
+                    else:
+                        answer = 1.0
+                #okay button
+                if question_type == 'okay':
+                    #always send recommendation if you press okay
+                    if answer:
+                        answer = 0.0
+                #yes no and it helps buttons
                 if answer == '1':
                     answer = 1.0
-                # if answer is no '2' send recommendation
-                if answer == '2':
+                # if answer is no '2' send recommendation, always send recommendation after textbox
+                if answer == '2' or question_type == 'textbox':
                     answer = 0.0
 
                 # time prequestion is received
@@ -138,47 +158,24 @@ def poll_ema(id, empathid, action_idx, duration=300, freq=5):
 
 
 def setup_message(message, type='binary'):
-    # suid = '27'
-    #
-    # template_path = os.path.join(DIR_PATH, 'message_templates', f'{type}.bin')
-    #
-    # with open(template_path, 'rb') as f:
-    #     template = f.read().decode()
-    #
-    # ema_survey = re.sub(r's:\d+:"\[\[MESSAGE_PLACEHOLDEER\]\]"', r's:' + str(
-    #     len(message.encode())) + ':"' + message + '"', template)
-    # buf = zlib.compress(ema_survey.encode())
-    #
-    # try:
-    #     conn = get_conn()
-    #     with conn.cursor() as cursor:
-    #         # Create a new record
-    #         sql = "UPDATE ema_context SET variables = %s WHERE suid = %s"
-    #         cursor.execute(sql, (buf, suid))
-    #     conn.commit()
-    # finally:
-    #     conn.close()
-    suid = 23
+    #open json with all prompts and their ids
+    with open("json_prompts.json", 'r') as file:
+        json_prompts = json.load(file)
 
-    #temporary dictionary to match the custom message with the message in promps textfile
-    prompt_dict = {"Custom Message":0, "Custom Message1":1, "Custom Message2":2}
-
-    # read in all caregiver propms
-    all_promps_file = open("caregiverpromps.txt", "r")
-    caregiver_promps = all_promps_file.read().strip().split("\n")
-    # pick the prompt you want
-    prompt = caregiver_promps[prompt_dict[message]]
-    all_promps_file.close()
-
+    #pick the prompt for tthe custom message
+    suid, vsid, message, retrieval_code, qtype = json_prompts[message].values()
     #converting prompt to binary
-    binary_prompt = prompt.encode('ascii')
+    binary_prompt = message.encode('ascii')
 
+    #Attempt 3
     #change bin file in ema_settings table
     try:
         db = get_conn()
         cursor = db.cursor()
         update_query = "UPDATE ema_settings SET value = %s WHERE suid = %s AND object = %s AND name like %s"
-        cursor.execute(update_query,(binary_prompt, '23','6747','question'))
+        #cursor.execute(update_query,(binary_prompt, '23','6747','question'))
+        cursor.execute(update_query,(binary_prompt, str(suid), vsid,'question'))
+
         db.commit()
     except Exception as err:
         log('Failed to update logged ema request:', err)
@@ -186,4 +183,5 @@ def setup_message(message, type='binary'):
     finally:
         db.close()
 
-    return suid
+    #returns suid, retrieval code, and question type
+    return suid, retrieval_code, qtype
