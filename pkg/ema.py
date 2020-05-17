@@ -8,6 +8,8 @@ import http
 import os
 import re
 import zlib
+import random
+import sqlite3
 
 from .log import log
 
@@ -105,28 +107,22 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
 
                 #slide bar type
                 if question_type == 'slide bar':
-                    #if 0-50 then send a recommendation
-                    if int(answer) in range(0,3):
-                        answer = 0.0
-                    else:
-                        answer = 1.0
+                    #return the number from 0-10 that was chosen
+                    answer = float(answer)
                 #multiple choice type
                 if question_type == 'multiple choice':
-                    #if first four choices, send a recommendation
-                    if int(answer) in range (1,5):
-                        answer = 0.0
-                    else:
-                        answer = 1.0
-                #okay button
-                if question_type == 'okay':
+                    #return the number that was chosen
+                    answer = float(answer)
+                #message received (okay) button
+                if question_type == 'message received':
                     #always send recommendation if you press okay
-                    if answer:
+                    if answer: #if therese is an end time
                         answer = 0.0
-                #yes no and it helps buttons
-                if answer == '1':
+                #yes no and it helps buttons (send more)
+                if answer == '1': #if they answer yes '1'
                     answer = 1.0
                 # if answer is no '2' send recommendation, always send recommendation after textbox
-                if answer == '2' or question_type == 'textbox':
+                if answer=='2' or question_type=='textbox' or question_type=='thanks':
                     answer = 0.0
 
                 # time prequestion is received
@@ -164,11 +160,120 @@ def setup_message(message, type='binary'):
 
     #pick the prompt for tthe custom message
     suid, vsid, message, retrieval_code, qtype = json_prompts[message].values()
+
+    #Morning Messages Formatting -------------------------------
+
+    #for morning reflection messages replace [MM] and if the question has [MRM]
+    if '[MM]' in message:
+        _, _, dflt_mrn_msge, _, _ = json_prompts['morning_message1'].values()
+        message = message.replace('[MM]',dflt_mrn_msge)
+    if '[MRM]' in message:
+        # pick random morning reflection question (only happens if message is general number 8)
+        randnum1 = random.randint(1, 4)
+        reflection_mssge_id = 'morning_reflection' + str(randnum1)
+        _, _, reflection_mssge, _, _ = json_prompts[reflection_mssge_id].values()
+        message = message.replace('[MRM]', reflection_mssge)
+
+    #adding on to messages
+    encourage_addons_dict = {'A': ['Taking a few deep breaths',
+                                   'Taking a time out',
+                                   'Practicing mindfulness',
+                                   'Engaging your loved one in a meaningful activity',
+                                   'Mindfulness',
+                                   'Deep breathing'],
+                             'B': ['Well done!',
+                                   'Keep up the good work!',
+                                   'You are doing so well.',
+                                   'You are doing a great job.',
+                                   'Celebrate small victories!',
+                                   'Nice work!',
+                                   'You are doing great.'],
+                             'C': ['Hang in there.',
+                                   'Remember you are doing this for important reasons.',
+                                   'Being a caregiver is hard work.',
+                                   'Not every day will be perfect.',
+                                   'Remember to give yourself a break, too.',
+                                   'Show yourself some kindness and compassion.',
+                                   'Be patient with yourself.',
+                                   'Focus on your success.']}
+
+    #Morning encouragement message: check if there is a special insert
+    if '[A]' in message:
+        randnum = random.randint(0, len(encourage_addons_dict['A'])-1)
+        message = message.replace('[A]', encourage_addons_dict['A'][randnum])
+    if '[B]' in message:
+        randnum = random.randint(0, len(encourage_addons_dict['B'])-1)
+        message = message.replace('[B]', encourage_addons_dict['B'][randnum])
+    if '[C]' in message:
+        randnum = random.randint(0, len(encourage_addons_dict['C'])-1)
+        message = message.replace('[C]', encourage_addons_dict['C'][randnum])
+
+
+    #Recommendation Messages Formatting-----------------------------
+
+    #for check in messages
+    distractions = ['Is the TV too loud?','Is the room to warm/cold?','Do you have a lot of visitors?','Have you had a busy day?']
+    if '[distractions]' in message:
+        randdist = random.randint(0, len(distractions)-1)
+        message = message.replace('[distractions]', distractions[randdist])
+
+    #ALL Messages Formatting --------------------------
+    #changes the name in the message (must retrieve names from DeploymentInformation.db)
+    caregiver_name = 'caregiver' #default
+    care_recipient_name = 'care recipient' #default
+    try:
+        con = None
+        con = sqlite3.connect(
+            'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+        cursorObj = con.cursor()
+
+        table_name = 'RESIDENTS_DATA'
+
+        # must select first and second row by using 0,2
+        cursorObj.execute("SELECT * FROM " + table_name +
+                          " ORDER BY CREATED_DATE DESC LIMIT 0,2")
+        names = cursorObj.fetchall()
+        care_recipient_name = names[0][9]
+        caregiver_name = names[1][9]
+
+    except Exception as e:
+        log('Read SQLite DB error:', e)
+    finally:
+        if con:
+            con.close()
+    #if the message uses a name, replace default with actual name from database
+    if '[caregiver name]' in message:
+        message = message.replace('[caregiver name]',caregiver_name)
+    if '[care recipient name]' in message:
+        message = message.replace('[care recipient name]',care_recipient_name)
+
+    #if message is multiple choice, retrieve answer choices
+    if '[]' in message:
+        answer_choices = message.split('[]')[1]
+        message = message.split('[]')[0]
+
+        #to change options choices must incode in binary
+        binary_choices = answer_choices.replace("\n", os.linesep).encode("ascii")
+
+        #change the answer choices
+        try:
+            db = get_conn()
+            cursor = db.cursor()
+            update_query = "UPDATE ema_settings SET value = %s WHERE suid = %s AND object = %s AND name like %s"
+            #cursor.execute(update_query,(binary_prompt, '23','6747','question'))
+            cursor.execute(update_query,(binary_choices, str(suid), vsid,'options'))
+
+            db.commit()
+        except Exception as err:
+            log('Failed to update logged ema request:', err)
+            db.rollback()
+        finally:
+            db.close()
+
     #converting prompt to binary
     binary_prompt = message.encode('ascii')
 
-    #Attempt 3
-    #change bin file in ema_settings table
+    #change bin file in ema_settings table (dynamic messaging)
     try:
         db = get_conn()
         cursor = db.cursor()
@@ -182,6 +287,5 @@ def setup_message(message, type='binary'):
         db.rollback()
     finally:
         db.close()
-
-    #returns suid, retrieval code, and question type
+    # returns suid, retrieval code, and question type
     return suid, retrieval_code, qtype
