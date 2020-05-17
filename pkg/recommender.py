@@ -440,8 +440,8 @@ class Recommender:
 
             time.sleep((next_evt_time - now).total_seconds())
 
-            #weekly_survey_count = 0
-            weekly_survey_count = 6
+            weekly_survey_count = 0
+            #weekly_survey_count = 6
 
             try:
                 # Sending morning messages logic
