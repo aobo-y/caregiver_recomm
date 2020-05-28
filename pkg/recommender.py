@@ -18,7 +18,7 @@ ACTIONS = [19, 20, 21]
 ACTIONDICT = {19: 120, 20: 120, 21: 120}
 
 
-class ServerModelAdpator:
+class ServerModelAdaptor:
     def __init__(self, client_id=0, url='http://localhost:8000/'):
         self.proxy = xmlrpc.client.ServerProxy(url, allow_none=True)
         self.client_id = client_id
@@ -36,7 +36,7 @@ class RemoteLocalBlender:
 
         log('Remote server:', server_config['url'])
         log('Client ID:', server_config['client_id'])
-        self.remote_model = ServerModelAdpator(**server_config)
+        self.remote_model = ServerModelAdaptor(**server_config)
 
         self.remote_status = True
 
