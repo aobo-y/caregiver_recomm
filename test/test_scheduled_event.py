@@ -1,10 +1,29 @@
 # from pkg.recommender import Recommender
 from typing import List, Tuple, Any
 from termcolor import cprint
-import copy, json, datetime, time
-from flask import Flask, request
+import copy, json
+import datetime, time
+import os
+import re
 from pkg.recommender import Recommender
+
+from flask import Flask, request
+import pymysql
 app = Flask(__name__)
+
+
+with open('msg_config.json') as msg_config:
+    message_info = json.load(msg_config)
+
+tester = ScheduledEventTester()
+tester.start_test()
+
+def query_db(query, ret=False):
+    db = pymysql.connect('localhost', 'root', '', 'ema')
+    c = db.cursor()
+    c.execute(query)
+    if ret:
+        return c.fetchall()
 
 """
 one entry of the config list is composed of:
@@ -16,8 +35,29 @@ one entry of the config list is composed of:
 6. choices to return to server; if multiple children, should match with #5
 """
 
+def verify_state(q, messages=None, n=None):
+    if messages == None and n == None:
+        raise Exception('must give at least one of message or index of message in msg_config')
+        return
+    if messages == None:
+        messages = msg_config[n]
+    # format of messages: {'morning_message': 3 'random_message': ''}
+    message = query_db(f'select QuestionName from reward_data where empathid="{q["empathid"]}"', ret=True)
+    m = re.match('(.*)_(.*?)([0-9]*)$', message)
+    front = m.group(1)
+    back = m.group(2)
+    number = int(m.group(3))
+    if (front in messages) and (back in messages[front]):
+        if number >= messages[front][back][0] and number <= messages[front][back][1]:
+            return True
+    elif (front + back) in messages:
+        whole = front + back
+        if number >= messages[whole][0] and number <= messages[whole][1]:
+            return True
+    return False
+
 class ScheduledEventTester:
-    def __init__(self, server_config, mock, mode):
+    def __init__(self, server_config=None, mock=None, mode='default'):
         self.config: List[List[Any]] = []
         self.routes: List[List[List[int]]] = []
         self.cur_state_idx_in_route = 0
@@ -35,12 +75,11 @@ class ScheduledEventTester:
         self.generate_config()
         self.prepare_test()
         self.cur_state_idx_in_route = 0
-        idx = self.routes[self.cur_route][self.cur_state_idx_in_route][0]
+        # self.routes[self.cur_route][self.cur_state_idx_in_route][0]
 
         self.start_time = datetime.datetime.now()
 
         recommender = Recommender(*self.recommender_params)
-
 
     def generate_config(self):
         morning_msg_suids = [19, 20, 23]
@@ -49,35 +88,35 @@ class ScheduledEventTester:
             b = i * 12
             for j in range(3):
                 self.config.append(
-                    [i, 600, 20, lambda x: x['suid'] == morning_msg_suids[j], [b + j + 1], [0, 1]],
+                    [i, 600, 20, lambda x: verify_state(x, n=j), [b + j + 1], [0, 1]],
                 )
             # evening message
             # likert
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 29, [b + 4], ['1', '2']])
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=3), [b + 4], ['1', '2']])
             # daily goal
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 22, [b + 5, b + 6], ['1', '2']])
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 19, [b + 7], ['1', '2']])
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 26, [b + 7], ['1', '2']])
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=4), [b + 5, b + 6], ['1', '2']])
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=5), [b + 7], ['1', '2']])
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=6), [b + 7], ['1', '2']])
             # ask about recommendation
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 22, [b + 8, b + 10], ['1', '2']]) # stress_manag1
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 26, [b + 9, b + 11], ['1', '2']]) # stress_managyes1
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 29, [b + 11], ['1', '2']]) # stress_managyes2
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 26, [b + 11], ['1', '2']]) # stress_managno1
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=7), [b + 8, b + 10], ['1', '2']]) # stress_manag1
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=8), [b + 9, b + 11], ['1', '2']]) # stress_managyes1
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=9), [b + 11], ['1', '2']]) # stress_managyes2
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=10), [b + 11], ['1', '2']]) # stress_managno1
 
-            self.config.append([i, 1380, 20, lambda x: x['suid'] == 29 or x['suid'] == 26, [b + 12], ['1', '2']]) # system_helpful
+            self.config.append([i, 1380, 20, lambda x: verify_state(x, n=11) or x['suid'] == 26, [b + 12], ['1', '2']]) # system_helpful
 
         base = 85
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 26, [base], ['1', '2']])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=12), [base], ['1', '2']])
 
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 22, [base + 1, base + 2], ['1', '2']])
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 1, [base + 2], [0, 1]])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=13), [base + 1, base + 2], ['1', '2']])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=14), [base + 2], [0, 1]])
 
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 1, [base + 3, base + 4], ['1', '2']])
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 1, [base + 4], [0, 1]])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=15), [base + 3, base + 4], ['1', '2']])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=16), [base + 4], [0, 1]])
 
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 1, [base + 5, None], ['1', '2']])
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 1, [base + 6], ['1', '2']])
-        self.config.append([6, 1380, 40, lambda x: x['suid'] == 1, [], ['1', '2']])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=17), [base + 5, None], ['1', '2']])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=18), [base + 6], ['1', '2']])
+        self.config.append([6, 1380, 40, lambda x: verify_state(x, n=19), [], ['1', '2']])
 
 
     def findAllRoutesHelper(self, graph: List[List[int]], idx: int, prevRoutes: List[List[List[int]]], choice_to_here):
@@ -132,8 +171,6 @@ class ScheduledEventTester:
                     cprint(f'Warning: bad test config, event {prev + 1} will always be later than event {cur + 1}.', 'red')
 
 
-tester = ScheduledEventTester()
-
 # convert time from total minutes to day, hour, minutes
 def convert_time(d):
     day = d / (24 * 60)
@@ -177,13 +214,14 @@ def handler():
 
     if tester.cur_state_idx_in_route == tester.routes[tester.cur_route] - 1:
         if tester.cur_route == len(tester.routes - 1):
-            finished = True
+            tester.finished = True
             print('--------------------')
             print(f'passed {tester.passed_tests} of {tester.total_tests} tests.')
         else:
             # use new recommender, renew start day
             tester.cur_state_idx_in_route = 0
             tester.cur_route += 1
+            tester.start_test()
     else:
         tester.cur_state_idx_in_route += 1
 
