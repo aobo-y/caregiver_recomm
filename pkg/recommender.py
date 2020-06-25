@@ -83,7 +83,8 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default'):
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False):
+        self.test_mode = test
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=300)  # 5 min
 
@@ -336,7 +337,7 @@ class Recommender:
             if con:
                 con.close()
 
-        schedule_evts = [(timedelta(hours=morn_hour, minutes=morn_min), '999'), (timedelta(
+        schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(timedelta(hours=morn_hour, minutes=morn_min), '999'), (timedelta(
             hours=ev_hour, minutes=ev_min), '998')]  # (hour, event_id)
 
         start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -363,7 +364,8 @@ class Recommender:
             next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
             log(f'Sleep till next schedule event: {next_evt_time_str}')
 
-            time.sleep((next_evt_time - now).total_seconds())
+            if not self.test_mode:
+                time.sleep((next_evt_time - now).total_seconds())
 
             # SENDING the message at 10am
             try:
