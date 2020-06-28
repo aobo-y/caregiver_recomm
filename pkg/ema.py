@@ -11,18 +11,23 @@ import zlib
 import random
 import sqlite3
 
+import base64
+
 from .log import log
 
 DIR_PATH = os.path.dirname(__file__)
-
 # get a mysql db connection
 
+message_sent = ''
+choices_sent = ''
 
 def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
 
 
 def call_ema(id, suid='', message='', alarm='true'):
+    global message_sent
+    global choices_sent
     empathid = None
     retrieval_object = ''
     qtype = ''
@@ -67,26 +72,27 @@ def call_ema(id, suid='', message='', alarm='true'):
         pass
 
     # connect to database for logging
-    try:
-        db = get_conn()
-        cursor = db.cursor()
+    if suid != '995':#do not log blank question (empath is too fast duplicate)
+        try:
+            db = get_conn()
+            cursor = db.cursor()
 
-        insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Uploaded) \
-                              VALUES ('%s','%s','%s','%s', '%s','%s')" % \
-            (empathid, time_sent, suid, 'NA', -1.0, 0)
-        cursor.execute(insert_query)
-        db.commit()
-    except Exception as err:
-        log('Failed to log ema request:', err)
-        db.rollback()
-    finally:
-        db.close()
+            insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Question,QuestionType,Uploaded) \
+                                  VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s')" % \
+                (empathid, time_sent, suid, 'NA', -1.0,message_sent, qtype,0)
+            cursor.execute(insert_query)
+            db.commit()
+        except Exception as err:
+            log('Failed to log ema request:', err)
+            db.rollback()
+        finally:
+            db.close()
 
     return empathid, retrieval_object, qtype
 
 
 def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, freq=5):
-    answer = None
+    answer = None #reload question case
     try:
         db = get_conn()
         cursor = db.cursor()
@@ -103,27 +109,38 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
             data = cursor.execute(query)
 
             if data:
-                answer = str(cursor.fetchall()).split("'")[1]
+                cursor_fetch = str(cursor.fetchall())
+                if cursor_fetch == '((None,),)': #check if NULL value
+                    answer = -1.0
+                else:
+                    answer = cursor_fetch.split("'")[1]
 
-                #slide bar type
-                if question_type == 'slide bar':
-                    #return the number from 0-10 that was chosen
-                    answer = float(answer)
-                #multiple choice type
-                if question_type == 'multiple choice':
-                    #return the number that was chosen
-                    answer = float(answer)
-                #message received (okay) button
-                if question_type == 'message received':
-                    #always send recommendation if you press okay
-                    if answer: #if therese is an end time
+                    #slide bar type
+                    if question_type == 'slide bar':
+                        #return the number from 0-10 that was chosen
+                        answer = float(answer)
+                    #multiple choice type 1-2-3-4...
+                    if question_type == 'multiple choice':
+                        #return the number that was chosen
+                        answer = answer.split('-')#list of answer choice in list for reward data table
+                        answer.sort() #looks better
+                        answer = str(([int(x) for x in answer])) #make every element an int but return lst as string
+                    #message received (okay) button
+                    if question_type == 'message received':
+                        #always send recommendation if you press okay
+                        if answer: #if there is an end time
+                            answer = 0.0
+                    #radio button choice 1 or 2 or 3...
+                    if question_type == 'radio':
+                        answer = int(answer)
+                    if question_type == 'textbox':
+                        answer = answer #keep what was entered in textbox
+                    #yes no and it helps buttons (send more)
+                    if answer == '1': #if they answer yes '1'
+                        answer = 1.0
+                    # if answer is no '2' send recommendation, always send recommendation after textbox
+                    if answer=='2' or question_type=='thanks':
                         answer = 0.0
-                #yes no and it helps buttons (send more)
-                if answer == '1': #if they answer yes '1'
-                    answer = 1.0
-                # if answer is no '2' send recommendation, always send recommendation after textbox
-                if answer=='2' or question_type=='textbox' or question_type=='thanks':
-                    answer = 0.0
 
                 # time prequestion is received
                 end_time = time.time()
@@ -153,13 +170,37 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
     return answer
 
 
-def setup_message(message, type='binary'):
+def setup_message(message_name, type='binary'):
+    global message_sent, choices_sent
+
+    #default
+    extra_morning_msg = False
+
+    #html code
+    php_newline = '<br />'
+    bld = '<strong>'
+    end_bld = '</strong>'
+    cntr = '<center>'
+    end_cntr = '</center>'
+
+    #getting recommendaiton category for morning message (always after '<>')
+    if '<>' in message_name:
+        A_category = message_name.split('<>')[1]
+        message_name = message_name.split('<>')[0]
+
+    #check if this message is the extra morning message
+    if '[!]' in message_name:
+        extra_morning_msg = True #to be used to change answer choices
+        message_name = message_name.replace('[!]','')
+
     #open json with all prompts and their ids
     with open("json_prompts.json", 'r') as file:
         json_prompts = json.load(file)
 
+
     #pick the prompt for tthe custom message
-    suid, vsid, message, retrieval_code, qtype = json_prompts[message].values()
+    suid, vsid, message, retrieval_code, qtype = json_prompts[message_name].values()
+
 
     #Morning Messages Formatting -------------------------------
 
@@ -175,49 +216,38 @@ def setup_message(message, type='binary'):
         message = message.replace('[MRM]', reflection_mssge)
 
     #adding on to messages
-    encourage_addons_dict = {'A': ['Taking a few deep breaths',
-                                   'Taking a time out',
-                                   'Practicing mindfulness',
-                                   'Engaging your loved one in a meaningful activity',
-                                   'Mindfulness',
-                                   'Deep breathing'],
-                             'B': ['Well done!',
-                                   'Keep up the good work!',
-                                   'You are doing so well.',
-                                   'You are doing a great job.',
-                                   'Celebrate small victories!',
-                                   'Nice work!',
-                                   'You are doing great.'],
-                             'C': ['Hang in there.',
-                                   'Remember you are doing this for important reasons.',
-                                   'Being a caregiver is hard work.',
-                                   'Not every day will be perfect.',
-                                   'Remember to give yourself a break, too.',
-                                   'Show yourself some kindness and compassion.',
-                                   'Be patient with yourself.',
-                                   'Focus on your success.']}
-
     #Morning encouragement message: check if there is a special insert
     if '[A]' in message:
-        randnum = random.randint(0, len(encourage_addons_dict['A'])-1)
-        message = message.replace('[A]', encourage_addons_dict['A'][randnum])
+        message = message.replace('[A]', json_prompts['morning:addon:A'][A_category])  # must choose message based on recommendation
     if '[B]' in message:
-        randnum = random.randint(0, len(encourage_addons_dict['B'])-1)
-        message = message.replace('[B]', encourage_addons_dict['B'][randnum])
+        randnum = random.randint(0, len(json_prompts['morning:addon:B']) - 1)
+        message = message.replace('[B]', json_prompts['morning:addon:B'][randnum])
     if '[C]' in message:
-        randnum = random.randint(0, len(encourage_addons_dict['C'])-1)
-        message = message.replace('[C]', encourage_addons_dict['C'][randnum])
+        randnum = random.randint(0, len(json_prompts['morning:addon:C']) - 1)
+        message = message.replace('[C]', json_prompts['morning:addon:C'][randnum])
 
 
     #Recommendation Messages Formatting-----------------------------
+    # must label all recomendations with their type
+    recomm_types_dict = {'timeout':'Time out:','breathing':'Deep Breathing:','mindful':'Mindfulness:','meaningful':'Meaningful Activity:'}
+    for r_type in recomm_types_dict.keys():
+        if r_type in message_name:
+            # must use <br /> instead of \n (php)
+            type_title = bld + recomm_types_dict[r_type] + end_bld + php_newline*2
+            #add recommendation type
+            message = type_title + message
+            #read url and style for image from json file
+            image_url,image_style = json_prompts['recomm_images'][r_type]
+            #add image to message
+            message = message + php_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
 
-    #for check in messages
-    distractions = ['Is the TV too loud?','Is the room to warm/cold?','Do you have a lot of visitors?','Have you had a busy day?']
+    #check in messages
     if '[distractions]' in message:
-        randdist = random.randint(0, len(distractions)-1)
-        message = message.replace('[distractions]', distractions[randdist])
+        randdist = random.randint(0, len(json_prompts['recomm:checkin:distract'])-1)
+        message = message.replace('[distractions]',json_prompts['recomm:checkin:distract'][randdist])
 
-    #ALL Messages Formatting --------------------------
+
+    #-- ALL Messages Formatting --
     #changes the name in the message (must retrieve names from DeploymentInformation.db)
     caregiver_name = 'caregiver' #default
     care_recipient_name = 'care recipient' #default
@@ -247,10 +277,25 @@ def setup_message(message, type='binary'):
     if '[care recipient name]' in message:
         message = message.replace('[care recipient name]',care_recipient_name)
 
-    #if message is multiple choice, retrieve answer choices
-    if '[]' in message:
-        answer_choices = message.split('[]')[1]
-        message = message.split('[]')[0]
+    #if message is multiple choice/radio button, retrieve answer choices.
+    #if message is extra morning msg, replace answer choices with thanks
+    if ('[]' in message) or extra_morning_msg:
+
+        #normal multiple choice or radio button questions
+        if '[]' in message:
+            answer_choices = message.split('[]')[1]
+            choices_sent = answer_choices #for reward_data
+            message = message.split('[]')[0]
+
+            # only for multiple choice questions add 'check...
+            if qtype == 'multiple choice':
+                message += ' (check as many as apply)'
+
+        #make the only answer choice thanks
+        if extra_morning_msg:
+            extra_morning_msg = False
+            #should not have the option for another encouragement msg
+            answer_choices = '1 Thanks!'
 
         #to change options choices must incode in binary
         binary_choices = answer_choices.replace("\n", os.linesep).encode("ascii")
@@ -260,7 +305,6 @@ def setup_message(message, type='binary'):
             db = get_conn()
             cursor = db.cursor()
             update_query = "UPDATE ema_settings SET value = %s WHERE suid = %s AND object = %s AND name like %s"
-            #cursor.execute(update_query,(binary_prompt, '23','6747','question'))
             cursor.execute(update_query,(binary_choices, str(suid), vsid,'options'))
 
             db.commit()
@@ -269,6 +313,15 @@ def setup_message(message, type='binary'):
             db.rollback()
         finally:
             db.close()
+
+
+    #if there is a next line in message
+    if '\n' in message:
+        message = message.replace('\n',php_newline)
+
+    #for STORING in reward data
+    message_sent = message.replace(php_newline,'').replace(bld,'').replace(end_bld,' ') #we dont want <br /> or bold
+    message_sent = pymysql.escape_string(message_sent) #must use escape for the \' in message
 
     #converting prompt to binary
     binary_prompt = message.encode('ascii')
