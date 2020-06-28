@@ -237,7 +237,7 @@ def setup_message(message_name, type='binary'):
             #add recommendation type
             message = type_title + message
             #read url and style for image from json file
-            image_url,image_style = json_prompts['recomm_images'][r_type]
+            image_url,image_style = json_prompts['recomm_images'][r_type] #191.168.0.107
             #add image to message
             message = message + php_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
 
