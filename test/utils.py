@@ -2,15 +2,22 @@ import json
 import re
 import pymysql
 
-with open('msg_config.json') as msg_config:
-    message_info = json.load(msg_config)
+with open('msg_config.json') as msg_config_file:
+    msg_config = json.load(msg_config_file)
+
+with open('../pkg/json_prompts.json') as all_messages_file:
+    all_messages = json.load(all_messages_file)
 
 def query_db(query, ret=False):
-    db = pymysql.connect('localhost', 'root', '', 'ema')
+    db = pymysql.connect('localhost', 'root', '', 'alzheimer_test_data')
     c = db.cursor()
     c.execute(query)
     if ret:
         return c.fetchall()
+
+def get_message_info(q):
+    name = query_db(f'select QuestionName from reward_data where empathid="{q["empathid"]}"', ret=True)
+    return all_messages[name]
 
 def verify_state(q, messages=None, n=None):
     if messages == None and n == None:
