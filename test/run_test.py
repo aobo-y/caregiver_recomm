@@ -20,7 +20,7 @@ tester.start_test()
 
 """
 one entry of the config list is composed of:
-1. time as minute (10:00 am -> 600) after start
+1. time as minute (10hr -> 600) after start
 2. time delta in minute that can tolerate before the time in 1
 3. time delta in minute that can tolerate after the time in 1
 4. function that decides whether the url dict meets the condition, true means correct state

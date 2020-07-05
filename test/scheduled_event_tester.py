@@ -91,6 +91,11 @@ class ScheduledEventTester:
         self.start_time = datetime.datetime.now()
 
     def __find_all_routes_helper(self, idx: int, prevRoutes: List[List[List[int]]], choice_to_here):
+        # print(idx)
+        # if len(graph[idx]) <= 1:
+        #     arr = prevRoutes
+        # else:
+        #     arr = copy.deepcopy(prevRoutes)
         arr = copy.deepcopy(prevRoutes)
         result: List[List[List[int]]] = []
 
@@ -122,16 +127,55 @@ class ScheduledEventTester:
         return result
 
     def __find_all_routes(self):
-        # graph = []
-        # ans = []
-        # for c in self.config:
-        #     graph.append(c[4])
-        #     ans.append(c[5])
-        # self.__graph = graph
-        # self.__ans = ans
-        # result = self.__find_all_routes_helper(0, [], None)
-        # print(len(result))
-        # return self.__find_all_routes_helper(0, [], None)
-        return [0] * len(self.config)
+        # self.config = [
+        #             [0, 0, 5, 0, [1], [0, 1]],
+        #             [0, 0, 5, 0, [2], [0, 1]],
+        #             [0, 0, 5, 0, [3], [0, 1]],
+        #             [5, 5, 5, 0, [4], ['1', '2']],
+        #             [5, 5, 5, 0, [5, 6], ['1', '2']],
+        #             [5, 5, 5, 0, [7], ['1', '2']],
+        #             [5, 5, 5, 0, [7], ['1', '2']],
+        #             [5, 5, 5, 0, [8, 10], ['1', '2']],
+        #             [5, 5, 5, 0, [9, 11], ['1', '2']],
+        #             [5, 5, 5, 0, [11], ['1', '2']],
+        #             [5, 5, 5, 0, [11], ['1', '2']],
+        #             [5, 5, 5, 0, [12], ['1', '2']],
+        #             [10, 0, 5, 0, [13], [0, 1]],
+        #             [10, 0, 5, 0, [14], [0, 1]],
+        #             [10, 0, 5, 0, [15], [0, 1]],
+        #             [15, 5, 5, 0, [16], ['1', '2']],
+        #             [15, 5, 5, 0, [17, 18], ['1', '2']],
+        #             [15, 5, 5, 0, [19], ['1', '2']],
+        #             [15, 5, 5, 0, [19], ['1', '2']],
+        #             [15, 5, 5, 0, [20, 22], ['1', '2']],
+        #             [15, 5, 5, 0, [21, 23], ['1', '2']],
+        #             [15, 5, 5, 0, [23], ['1', '2']],
+        #             [15, 5, 5, 0, [23], ['1', '2']],
+        #             [15, 5, 5, 0, [24], ['1', '2']],
+        #             [20, 0, 5, 0, [25], [0, 1]],
+        #             [20, 0, 5, 0, [26], [0, 1]],
+        #             [20, 0, 5, 0, [27], [0, 1]],
+        #             [25, 5, 5, 0, [28], ['1', '2']],
+        #             [25, 5, 5, 0, [29, 30], ['1', '2']],
+        #             [25, 5, 5, 0, [31], ['1', '2']],
+        #             [25, 5, 5, 0, [31], ['1', '2']],
+        #             [25, 5, 5, 0, [32, 34], ['1', '2']],
+        #             [25, 5, 5, 0, [33, 35], ['1', '2']],
+        #             [25, 5, 5, 0, [35], ['1', '2']],
+        #             [25, 5, 5, 0, [35], ['1', '2']],
+        #             [25, 5, 5, 0, [36], ['1', '2']],
+        #             [30, 0, 5, 0, [37], [0, 1]],
+        #             [30, 0, 5, 0, [], [0, 1]]
+        # ]
+        graph = []
+        ans = []
+        for c in self.config:
+            graph.append(c[4])
+            ans.append(c[5])
+        self.__graph = graph
+        self.__ans = ans
+        result = self.__find_all_routes_helper(0, [], None)
+        print(len(result))
+        return self.__find_all_routes_helper(0, [], None)
 
 tester = ScheduledEventTester()
