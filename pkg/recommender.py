@@ -14,9 +14,9 @@ from .stats import Stats
 from .log import log
 from .ema import call_ema, poll_ema, get_conn
 
-ACTIONS = ['timeout1','timeout2','timeout3','timeout4','timeout5','timeout6','timeout7','timeout8','timeout9',
-           'breathing1','breathing2','breathing3','breathing4','breathing5','breathing6','breathing7','breathing8',
-           'bodyscan1','bodyscan2','enjoyable1','enjoyable2','enjoyable3','enjoyable4','enjoyable5','enjoyable6','enjoyable7','enjoyable8']
+ACTIONS = ['timeout:1','timeout:2','timeout:3','timeout:4','timeout:5','timeout:6','timeout:7','timeout:8','timeout:9',
+           'breathing:1','breathing:2','breathing:3','breathing:4','breathing:5','breathing:6','breathing:7','breathing:8',
+           'bodyscan:1','bodyscan:2','enjoyable:1','enjoyable:2','enjoyable:3','enjoyable:4','enjoyable:5','enjoyable:6','enjoyable:7','enjoyable:8']
 POLL_TIME = 120
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
@@ -24,6 +24,8 @@ COOLDOWN_TIME = 1800 #30 min
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
+TIME_MORN_DELT = timedelta(hours=10, minutes=0)
+TIME_EV_DELT = timedelta(hours=23, minutes=0)
 
 class ServerModelAdpator:
     def __init__(self, client_id=0, url='http://localhost:8000/'):
@@ -160,6 +162,12 @@ class Recommender:
                     log('Max amount of messages sent today')
                     return
 
+                #send only during acceptable time
+                current_time = timedelta(hours = datetime.now().hour, minutes= datetime.now().minute)
+                if current_time < TIME_MORN_DELT or current_time > TIME_EV_DELT:
+                    log('Current time outside acceptable time interval')
+                    return
+
                 empathid = self._send_action(speaker_id, action_idx)
 
                 if not empathid:
@@ -201,14 +209,14 @@ class Recommender:
         # send the blank message after recommendation
         _ = call_ema('1', '995', alarm='false')
 
-        if 'meaningful' in message:
-            time.sleep(3600) #wait for 60 min if recommendation is meaningful activity
+        if 'enjoyable' in CURRENT_RECOMM_CATEGORY:
+            time.sleep(3600) #wait for 60 min if recommendation is enjoyable activity
         else:
             time.sleep(1800) #wait for 30 min
         #time.sleep(10)
 
         #post recommendation logic
-        message = 'daytime:postrecomm:implement'
+        message = 'daytime:postrecomm:implement:1'
         answer_bank = [1.0,0.0,-1.0]
         # ask if stress management tip was done (yes no) question
         postrecomm_answer = self.call_poll_ema(message,answer_bank, speaker_id)
@@ -216,7 +224,7 @@ class Recommender:
         # if done (Yes)
         if postrecomm_answer == 1.0:
             reward = 1.0
-            message = 'daytime:postrecomm:helpfulyes'
+            message = 'daytime:postrecomm:helpfulyes:1'
             helpful_yes = self.call_poll_ema(message,speaker_id=speaker_id,all_answers=True) #return all answers
 
             if helpful_yes and helpful_yes != -1.0:  # dont want to add None to list
@@ -229,7 +237,7 @@ class Recommender:
         # if recomm wasnt done (No)
         if postrecomm_answer == 0.0:
             reward = 0.0
-            message = 'daytime:postrecomm:helpfulno'
+            message = 'daytime:postrecomm:helpfulno:1'
 
             # if helpful_no: #multiple choice 1 2 or 3
             helpful_no = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True)  # return all answers
@@ -263,14 +271,14 @@ class Recommender:
 
         #for testing!:
         #time.sleep(360)
-        # time.sleep(120)
+        #time.sleep(120)
 
         if self.mock:
             return 'mock_id'
 
         # Send check in question (prequestion) pick random question
         randnum1 = random.randint(1, 5)
-        message = 'daytime:check_in'+str(randnum1)
+        message = 'daytime:check_in:'+str(randnum1)
         # send recommendation if they answer thanks! or dont select choice
         answer_bank = [0.0,-1.0]
 
@@ -282,7 +290,8 @@ class Recommender:
         #pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
         recomm_id = ACTIONS[action_idx]
         # get the recommendation category (strip the number)
-        CURRENT_RECOMM_CATEGORY = ''.join(letter for letter in recomm_id if not letter.isdigit())
+        r_cat = ''.join(letter for letter in recomm_id if not letter.isdigit())
+        CURRENT_RECOMM_CATEGORY = r_cat.replace(':','')
         msg = 'daytime:recomm:' + recomm_id
         answer_bank = [0.0] #message received 0.0
         answer, req_id = self.call_poll_ema(msg,answer_bank, speaker_id, empath_return=True)#return empath id
@@ -322,8 +331,8 @@ class Recommender:
         '''
         Send the morning message at 10 am
         '''
-        global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT
-
+        global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT
+        
         time.sleep(180)
 
 
@@ -377,16 +386,17 @@ class Recommender:
                 con.close()
 
 
+        # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
+        # #time.sleep(10)
+        # morn_hour = 10
+        # morn_min = 20
+        # ev_hour = 23
+        # ev_min = 22
 
-        # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
-        # time.sleep(10)
-        # morn_hour = 2
-        # morn_min = 21
-        # ev_hour = 3
-        # ev_min = 38
+        TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
+        TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
 
-        schedule_evts = [(timedelta(hours=morn_hour, minutes=morn_min), 'morning message'), (timedelta(
-            hours=ev_hour, minutes=ev_min), 'evening message')]  # (hour, event_id)
+        schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
 
         start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
@@ -421,7 +431,7 @@ class Recommender:
                 # Sending morning messages logic
                 if event_id == 'morning message':
                     #Send the intro morning message
-                    message = 'morning:intro1'
+                    message = 'morning:intro:1'
                     intro_answer = self.call_poll_ema(message, all_answers=True) #0.0 or -1.0
 
 
@@ -432,7 +442,7 @@ class Recommender:
                     category = random.choice(list(pos_categ.keys()))
                     randnum2 = random.randint(1,pos_categ[category])
                     # send 3 times (each question will wait 120 seconds (2 min))
-                    message = 'morning:positive:' + category + str(randnum2)
+                    message = 'morning:positive:' + category + ':' + str(randnum2)
                     #textbox, thanks: 0.0, or no choice: -1.0
                     reflection_answer = self.call_poll_ema(message, all_answers=True)
 
@@ -487,14 +497,14 @@ class Recommender:
                     #choose category of encouragement messages to send
                     encourage_dict = {'general': 8, 'success': 2, 'unsuccess': 2, 'unsuccessmult': 2,'successmult':1}
                     randnum3 = random.randint(1, encourage_dict[encourage_category])
-                    message = 'morning:encouragement:' + encourage_category + str(randnum3) + '<>' + recomm_category
+                    message = 'morning:encouragement:' + encourage_category + ':' + str(randnum3) + '<>' + recomm_category
                     answer_bank = [1, 2, 3, -1.0]
                     enc_answer = self.call_poll_ema(message,answer_bank)
 
                     # always sending a general question (make sure not to send the same question as before
                     randnum4 = random.choice([i for i in range(1, encourage_dict['general'] + 1) if i not in [randnum3]])
                     # extra encourgement, adding [!] to make answer choice only Thanks!
-                    extra_msg_name = 'morning:encouragement:general' + str(randnum4) + '[!]'
+                    extra_msg_name = 'morning:encouragement:general:' + str(randnum4) + '[!]'
 
                     # if they answer send more encouraging messages (send general encouragement)
                     if enc_answer == 1:
@@ -509,7 +519,7 @@ class Recommender:
 
                     #send the self care message ---------------------
                     randnum5 = random.randint(1, 3)
-                    message = 'morning:self_care_goal' + str(randnum5)
+                    message = 'morning:self_care_goal' + ':' + str(randnum5)
                     answer_bank = [0.0,-1.0] #okay or skip
                     self_care_answer = self.call_poll_ema(message, answer_bank)
 
@@ -520,7 +530,7 @@ class Recommender:
                     MESSAGES_SENT_TODAY = 0 #reset messages to 0
 
                     #send evening intro message -------
-                    message = 'evening:intro1'
+                    message = 'evening:intro:1'
                     evening_introanswer = self.call_poll_ema(message,all_answers=True) #0.0 msg rec or -1.0 skipped
 
 
@@ -529,68 +539,68 @@ class Recommender:
                     likert_categ = {'stress': 1, 'lonely': 1, 'health': 2}
                     category = random.choice(list(likert_categ.keys()))
                     randnum1 = random.randint(1, likert_categ[category])
-                    message = 'evening:likert:' + category + str(randnum1)
+                    message = 'evening:likert:' + category + ':' + str(randnum1)
                     likert_answer = self.call_poll_ema(message,all_answers=True) #0 -1.0 or any number on scale
 
 
                     #send the evening message daily goal follow-up ---------------
-                    message = 'evening:daily:goal1' #always send the same message
+                    message = 'evening:daily:goal:1' #always send the same message
                     answer_bank = [1.0, 0.0,-1.0] #yes, no, skipped
                     goal_answer = self.call_poll_ema(message,answer_bank)
 
                     # if yes
                     if goal_answer == 1.0:
                         # send the good job! message
-                        message = 'evening:daily:goalyes1' #always send the same message
+                        message = 'evening:daily:goalyes:1' #always send the same message
                         thanks_answer = self.call_poll_ema(message, all_answers=True) #thanks 0.0, skipped -1.0
                     # if no
                     elif goal_answer == 0.0:
                         # send the multiple choice question asking why
-                        message = 'evening:daily:goalno1' # always send the same message
+                        message = 'evening:daily:goalno:1' # always send the same message
                         multiple_answer = self.call_poll_ema(message,all_answers=True) #multiple choice or skipped
 
 
                     #ask about recommendations questions---------------
                     recomm_answer = -1.0  # default for system helpful question
-                    message = 'evening:stress:manag1' #always send the same message
+                    message = 'evening:stress:manag:1' #always send the same message
                     answer_bank = [1.0,0.0,-1.0] #yes, no, skipped
                     recomm_answer = self.call_poll_ema(message,answer_bank)
                     # if yes
                     if recomm_answer == 1.0:
-                        message = 'evening:stress:managyes1' # always send the same message
+                        message = 'evening:stress:managyes:1' # always send the same message
                         stress1_answer = self.call_poll_ema(message, all_answers=True)
 
                     # if no
                     elif recomm_answer == 0.0:
                         # send the multiple choice question asking why
-                        message = 'evening:stress:managno1' # always send the same message
+                        message = 'evening:stress:managno:1' # always send the same message
                         mult_answer = self.call_poll_ema(message,all_answers=True) #multiple choice or skipped
 
 
                     #send the evening message system helpful questions (only if they did stress management)---------------
                     if recomm_answer == 1.0:
                         randnum2 = random.randint(1, 3)  # pick 1 of 3 questions
-                        message = 'evening:system:helpful'+str(randnum2)
+                        message = 'evening:system:helpful:' + str(randnum2)
                         helpful_answer = self.call_poll_ema(message,all_answers=True) #slide bar, 0, or -1.0
 
 
                 #Weekly Survey--------- if one week has passed! one week has passed
-                if weekly_survey_count == 7:
+                if weekly_survey_count >= 7:
                     #weekly survey question ---------
                     weekly_survey_count = 0
 
-                    message = 'weekly:survey1' # always send the same survey
+                    message = 'weekly:survey:1' # always send the same survey
                     weekly_answer = self.call_poll_ema(message,all_answers=True) #any answer mult or skipped: -1.0
 
 
                     #Number of questions ------------
-                    message = 'weekly:messages1' # always send the same survey
+                    message = 'weekly:messages:1' # always send the same survey
                     answer_bank = [1.0,0.0,-1.0] #yes, no, skipped
                     good_ques = self.call_poll_ema(message,answer_bank)
 
                     #if no: 0.0 (not okay with the number of questions), if yes (1.0) no change
                     if good_ques == 0.0:
-                        message = 'weekly:messages:no1' # always send the same survey
+                        message = 'weekly:messages:no:1' # always send the same survey
                         number_ques = self.call_poll_ema(message, all_answers=True) #multiple choice
 
                         max_messages_delta = 1  # change by one message
@@ -606,13 +616,13 @@ class Recommender:
 
 
                     #Time between questions ---------------
-                    message = 'weekly:msgetime1' # always send the same question
+                    message = 'weekly:msgetime:1' # always send the same question
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
                     good_time = self.call_poll_ema(message,answer_bank)#multiple choice
 
                     # if no: 0.0(they want more time between questions), if yes 1.0, no change
                     if good_time == 0.0:
-                        message = 'weekly:msgetime:no1'  # always send the same survey
+                        message = 'weekly:msgetime:no:1'  # always send the same survey
                         number_ques = self.call_poll_ema(message,all_answers=True) #multiple choice
 
                         cooldown_delta = 300  # change by 5 min
@@ -628,13 +638,13 @@ class Recommender:
                     #Time of morning and evening questions ------------
                     change_by_hour = [-2, -1, -1, 0, 0, 0, 1, 1, 2]
                     change_by_min = [0, -30, 0, -30, 0, 30, 0, 30, 0]
-                    message = 'weekly:startstop1'  # always send the same survey
+                    message = 'weekly:startstop:1'  # always send the same survey
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
                     good_startstop = self.call_poll_ema(message,answer_bank)
 
                     # if no (they want different start stop time)
                     if good_startstop == 0.0:
-                        message = 'weekly:startstop:start1' # always send the same survey
+                        message = 'weekly:startstop:start:1' # always send the same survey
                         start_time = self.call_poll_ema(message,all_answers=True)
 
 
@@ -651,7 +661,7 @@ class Recommender:
                             schedule_evts[0] = (morning_timedelta, 'morning message')  # since tuples immutable
 
                         # send question about evening end time change
-                        message = 'weekly:startstop:stop1'
+                        message = 'weekly:startstop:stop:1'
                         stop_time = self.call_poll_ema(message,all_answers=True) #multiple choice
 
                         if stop_time and stop_time != -1.0:  # answer 1-9 (matches the list above)

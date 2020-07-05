@@ -33,11 +33,6 @@ def call_ema(id, suid='', message='', alarm='true'):
     empathid = None
     retrieval_object = ''
     qtype = ''
-    # the time must be between 8:00 am and 12:00 am
-    #only works after 8 oclock
-    if datetime.datetime.now().hour < 8:
-        log('It is before 8 oclock')
-        return ''
 
     if message:
         suid, retrieval_object, qtype = setup_message(message)
@@ -208,12 +203,12 @@ def setup_message(message_name, type='binary'):
 
     #for morning reflection messages replace [MM] and if the question has [MRM]
     if '[MM]' in message:
-        _, _, dflt_mrn_msge, _, _ = json_prompts['morning:gen_message1'].values()
+        _, _, dflt_mrn_msge, _, _ = json_prompts['morning:gen_message:1'].values()
         message = message.replace('[MM]',dflt_mrn_msge)
     if '[MRM]' in message:
         # pick random morning reflection question (only happens if message is general number 8)
         randnum1 = random.randint(1, 4)
-        reflection_mssge_id = 'morning:positive:reflection' + str(randnum1)
+        reflection_mssge_id = 'morning:positive:reflection:' + str(randnum1)
         _, _, reflection_mssge, _, _ = json_prompts[reflection_mssge_id].values()
         message = message.replace('[MRM]', reflection_mssge)
 
