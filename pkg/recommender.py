@@ -27,7 +27,7 @@ EXTRA_ENCRGMNT = ''
 TIME_MORN_DELT = timedelta(hours=10, minutes=0)
 TIME_EV_DELT = timedelta(hours=23, minutes=0)
 
-class ServerModelAdpator:
+class ServerModelAdaptor:
     def __init__(self, client_id=0, url='http://localhost:8000/'):
         self.proxy = xmlrpc.client.ServerProxy(url, allow_none=True)
         self.client_id = client_id
@@ -45,7 +45,7 @@ class RemoteLocalBlender:
 
         log('Remote server:', server_config['url'])
         log('Client ID:', server_config['client_id'])
-        self.remote_model = ServerModelAdpator(**server_config)
+        self.remote_model = ServerModelAdaptor(**server_config)
 
         self.remote_status = True
 
@@ -92,7 +92,8 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default'):
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False):
+        self.test_mode = test
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
 
@@ -396,7 +397,7 @@ class Recommender:
         TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
         TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
 
-        schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
+        schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
 
         start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
@@ -422,7 +423,8 @@ class Recommender:
             next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
             log(f'Sleep till next schedule event: {next_evt_time_str}')
 
-            time.sleep((next_evt_time - now).total_seconds())
+            if not self.test_mode:
+                time.sleep((next_evt_time - now).total_seconds())
 
             weekly_survey_count = 0
             #weekly_survey_count = 6
