@@ -17,6 +17,7 @@
        ...
    }
    ```
+   The message name can contain no number, a message like this should have an empty array to correspond to this.
    The numbers are inclusive.
 2. Edit `generate_config` in `config.py`, return a state config array in which each entry is an array with:
    1. time as minute (10hr -> 600) after start

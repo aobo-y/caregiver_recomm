@@ -92,8 +92,7 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False):
-        self.test_mode = test
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False, test_num_repeat=1):
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
 
@@ -105,6 +104,10 @@ class Recommender:
 
         self.mode = mode
         self.mock = mock
+
+        self.test_mode = test
+        self.test_num_repeat = test_num_repeat
+
         if self.mock:
             self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
@@ -397,7 +400,7 @@ class Recommender:
         TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
         TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
 
-        schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
+        schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')] if not self.test_mode else [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')]  # (hour, event_id)
 
         start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
@@ -423,7 +426,7 @@ class Recommender:
             next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
             log(f'Sleep till next schedule event: {next_evt_time_str}')
 
-            if not self.test_mode:
+            if not self.test_mode: # don't need to wait if test mode
                 time.sleep((next_evt_time - now).total_seconds())
 
             weekly_survey_count = 0
@@ -587,7 +590,7 @@ class Recommender:
 
 
                 #Weekly Survey--------- if one week has passed! one week has passed
-                if weekly_survey_count >= 7:
+                if weekly_survey_count >= 7 if not self.test_mode else self.test_num_repeat:
                     #weekly survey question ---------
                     weekly_survey_count = 0
 
@@ -697,7 +700,8 @@ class Recommender:
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
             req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg)
 
-            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, POLL_TIME)
+            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, POLL_TIME, 
+            duration= 300 if not self.test_mode else 3)
             #answer: None, if nothing is selected...reload
 
             #any answer other than None
