@@ -18,6 +18,11 @@ lock = Lock()
 tester = ScheduledEventTester()
 # tester.start_test()
 
+total_tests = 0
+passed_tests = 0
+
+interval = 0.1
+
 """
 one entry of the config list is composed of:
 1. time as minute (10hr -> 600) after start
@@ -30,7 +35,7 @@ one entry of the config list is composed of:
 
 @app.route('/')
 def handler():
-    global tester
+    global tester, total_tests, passed_tests
     lock.acquire()
 
     if tester.finished:
@@ -44,29 +49,31 @@ def handler():
         lock.release()
         return '0'
     if not tester.at_correct_state(q):
-        cprint(f'Error in state {cur_state} in route {tester.cur_route + 1}: {request.args.get("q")} cannot meet condition of state {tester.cur_state_index}.', 'red')
+        cprint(f'Error in state {cur_state} in route {tester.cur_route + 1}: \
+            {request.args.get("q")} cannot meet condition of state {tester.cur_state_index}.', 'red')
         no_err = False
 
     now = datetime.datetime.now()
 
     if tester.at_expected_time(now):
-        cprint(f'Error in state {cur_state} in route {tester.cur_route + 1}: received action in wrong time, expect to receive at {tester.expected_time}, actually received at {now}, and is not tolerable.', 'red')
+        cprint(f'Error in state {cur_state} in route {tester.cur_route + 1}: \
+            received action in wrong time, expect to receive at {tester.expected_time}, \
+                actually received at {now}, and is not tolerable.', 'red')
         no_err = False
 
     if no_err:
         cprint(f'passed test in state {cur_state} in route {tester.cur_route + 1}.', 'green')
-        tester.passed_tests += 1
-    tester.total_tests += 1
+        passed_tests += 1
+    total_tests += 1
 
     ans = tester.cur_state_response
-
     tester.increment()
 
     primkey = f'{q["id"]}:{q["empathid"]}'
-
     retrieval_code = get_message_info(q)["retrieval_object"]
-    query_db(f'INSERT INTO ema_data(suid, primkey, variablename, answer, language, mode, version, completed) VALUES \
-    ("{q["suid"]}", "{primkey}", "{retrieval_code}", "{ans}", 1, 3, 1, 1) ')
+
+    query_db(f'INSERT INTO ema_data(suid, primkey, variablename, answer, language, mode, version, completed) \
+         VALUES ("{q["suid"]}", "{primkey}", "{retrieval_code}", "{ans}", 1, 3, 1, 1) ')
 
     if not tester.finished:
         state_idx = tester.cur_state_idx_in_route
@@ -74,15 +81,19 @@ def handler():
         route = tester.cur_route
 
         def check_change():
-            time.sleep(0.2 * 60 * 2)
+            time.sleep(interval * 60 * 2)
             # lock.acquire()
             if state_idx == tester.cur_state_idx_in_route and route == tester.cur_route:
-                cprint(f'Error in state {state} in route {route + 1}: did not receive the next state in appropriate time', 'red')
+                cprint(f'Error in state {state} in route {route + 1}: \
+                    did not receive the next state in appropriate time', 'red')
             # lock.release()
 
         check_after = Thread(target=check_change)
         check_after.daemon = True
         check_after.start()
+    else:
+        print('--------------------')
+        print(f'passed {passed_tests} of {total_tests} tests.')
 
     lock.release()
     return ''

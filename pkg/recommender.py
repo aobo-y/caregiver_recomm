@@ -429,7 +429,7 @@ class Recommender:
                 log(f'Sleep till next schedule event: {next_evt_time_str}')
                 time.sleep((next_evt_time - now).total_seconds())
             elif evt_count > 0:
-                time.sleep(0.2 * 60)
+                time.sleep(0.1 * 60)
 
             weekly_survey_count = 0
             #weekly_survey_count = 6
@@ -685,7 +685,7 @@ class Recommender:
                 _ = call_ema('1', '995', alarm='false', test=True)
 
             evt_count += 1
-            if self.test_mode and evt_count >= self.test_num_events:
+            if self.test_mode and evt_count >= self.test_num_events * len(schedule_evts):
                 return
 
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3):

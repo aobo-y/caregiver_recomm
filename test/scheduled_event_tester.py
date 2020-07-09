@@ -28,9 +28,6 @@ class ScheduledEventTester:
         self.start_time = None
         self.finished = False
 
-        self.total_tests = 0
-        self.passed_tests = 0
-
         self.recommender_params = (5, server_config, mock, mode)
         self.__initialize_in_cur_route()
 
@@ -55,8 +52,6 @@ class ScheduledEventTester:
         if self.cur_state_idx_in_route == len(self.routes[self.cur_route]) - 1:
             if self.cur_route == len(self.routes) - 1:
                 self.finished = True
-                print('--------------------')
-                print(f'passed {self.passed_tests} of {self.total_tests} tests.')
             else:
                 # use new recommender, renew start day
                 self.cur_state_idx_in_route = 0
@@ -140,7 +135,7 @@ if __name__ == '__main__':
     tester = ScheduledEventTester()
     print(f'[schedule_event_tester.py] # routes {len(tester.routes)}')
     for i in range(len(tester.routes)):
-        print(i)
+        print(i + 1)
         for c in tester.routes[i]:
             print(c)
         print('----------------')

@@ -22,15 +22,18 @@ class ConfigMaker:
         adds state to config; for convenience, it is recommended to put the default next-state at index 0
         """
         if len(choices) < len(next_states_increment):
-            raise Exception('Config: the number of choice should be greater than or equal to the number of next states.')
+            raise Exception('Config: # of choice should be greater than or equal to # of next states.')
+
         next_states = []
         for n in next_states_increment:
             if n != None:
                 next_states.append(self._cur + n)
             else:
-                next_states.append(n)
-        self._config.append([time, time_before, time_after, lambda x: verify_state(x, n=message_no),
-        next_states, choices])
+                next_states.append(None)
+
+        self._config.append([time, time_before, time_after, 
+            lambda x: verify_state(x, n=message_no), next_states, choices])
+
         self._cur += 1
 
     def _make_no_response_states(self, state, num, default_next_index):
@@ -75,7 +78,7 @@ class ConfigMaker:
         return len(self._config)
     
 def generate_config():
-    interv = 0.2
+    interv = 0.1
     c = ConfigMaker()
     
     for i in range(1):
