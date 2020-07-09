@@ -1,2 +1,2 @@
 sudo service mysql start
-mysql -h localhost -u root < ema_data.sql
+mysql -h localhost -u root < schema.sql

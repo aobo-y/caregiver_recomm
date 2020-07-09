@@ -12,7 +12,6 @@ from utils import convert_time
 class ScheduledEventTester:
     def __init__(self, server_config=None, mock=None, mode='default'):
         self.config: List[List[Any]] = generate_config()
-        print(len(self.config))
         self.routes: List[List[List[int]]] = []
         self.cur_state_idx_in_route = 0
         self.cur_route = 0
@@ -36,7 +35,7 @@ class ScheduledEventTester:
         self.__initialize_in_cur_route()
 
         self.recommender = Recommender(test=True)
-        self.recommender.start()
+        # self.recommender.start()
 
     @property
     def cur_state_index(self) -> int:
@@ -53,8 +52,8 @@ class ScheduledEventTester:
         return self.routes[self.cur_route][self.cur_state_idx_in_route][1]
 
     def increment(self):
-        if self.cur_state_idx_in_route == self.routes[self.cur_route] - 1:
-            if self.cur_route == len(self.routes - 1):
+        if self.cur_state_idx_in_route == len(self.routes[self.cur_route]) - 1:
+            if self.cur_route == len(self.routes) - 1:
                 self.finished = True
                 print('--------------------')
                 print(f'passed {self.passed_tests} of {self.total_tests} tests.')
@@ -135,7 +134,13 @@ class ScheduledEventTester:
         self.__graph = graph
         self.__ans = ans
         result = self.__find_all_routes_helper(0, [], None)
-        print(len(result))
         return self.__find_all_routes_helper(0, [], None)
 
-tester = ScheduledEventTester()
+if __name__ == '__main__':
+    tester = ScheduledEventTester()
+    print(f'[schedule_event_tester.py] # routes {len(tester.routes)}')
+    for i in range(len(tester.routes)):
+        print(i)
+        for c in tester.routes[i]:
+            print(c)
+        print('----------------')
