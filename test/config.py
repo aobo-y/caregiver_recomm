@@ -84,7 +84,7 @@ def generate_config():
     for i in range(1):
         # morning message
         for j in range(5): 
-            c.add_state(0, 0, interv, j, [1], ["1", "2"])
+            c.add_state(0, interv, interv, j, [1], ["1", "2"])
 
         # evening message
         # intro

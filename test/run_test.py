@@ -8,6 +8,7 @@ from threading import Lock, Thread
 
 from flask import Flask, request
 import pymysql
+import logging
 
 from config import generate_config
 from scheduled_event_tester import ScheduledEventTester
@@ -16,22 +17,33 @@ from utils import query_db, get_message_info
 app = Flask(__name__)
 lock = Lock()
 tester = ScheduledEventTester()
-# tester.start_test()
+
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 total_tests = 0
 passed_tests = 0
-
 interval = 0.1
 
-"""
-one entry of the config list is composed of:
-1. time as minute (10hr -> 600) after start
-2. time delta in minute that can tolerate before the time in 1
-3. time delta in minute that can tolerate after the time in 1
-4. function that decides whether the url dict meets the condition, true means correct state
-5. next nodes, please note that **NO LOOPS ARE ALLOWED**; for convenience, start node must at index 0
-6. choices to return to server; if multiple children, should match with #5
-"""
+def log(state_info, time_err_info=None, state_err_info=None):
+    time_err_str = 'received action in wrong time, expect to receive at {}, ' \
+            'actually received at {}, and is not tolerable. '
+    state_err_str = 'cannot meet condition of state {}, expected: {}, received: {}. '
+    common = f'in state {state_info[0]} in route {state_info[1]}'
+
+    if time_err_info == None and state_err_info == None:
+        cprint(f'passed test {common}.', 'green')
+
+    elif time_err_info != None and state_err_info != None:
+        cprint(f'Error in {common}:' + 
+        time_err_str.format(*time_err_info) + state_err_str.format(*state_err_info),
+         'red')
+
+    elif time_err_info != None:
+        cprint(f'Error in {common}:' + time_err_str.format(*time_err_info), 'red')
+
+    else:
+        cprint(f'Error in {common}:' + state_err_str.format(*state_err_info), 'red')
 
 @app.route('/')
 def handler():
@@ -44,25 +56,21 @@ def handler():
 
     cur_state = tester.cur_state_index
     q = json.loads(request.args.get('q'))
-    no_err = True
+
     if q["suid"] == "995":
         lock.release()
         return '0'
-    if not tester.at_correct_state(q):
-        cprint(f'Error in state {cur_state} in route {tester.cur_route + 1}: \
-            {request.args.get("q")} cannot meet condition of state {tester.cur_state_index}.', 'red')
-        no_err = False
 
     now = datetime.datetime.now()
+    at_correct_time = tester.at_expected_time(now)
+    
+    at_correct_state, expected, actual = tester.verify_state(q)
 
-    if tester.at_expected_time(now):
-        cprint(f'Error in state {cur_state} in route {tester.cur_route + 1}: \
-            received action in wrong time, expect to receive at {tester.expected_time}, \
-                actually received at {now}, and is not tolerable.', 'red')
-        no_err = False
+    log([cur_state, tester.cur_route + 1], 
+        None if at_correct_time else [tester.expected_time, now],
+        None if at_correct_state else [tester.cur_state_index, expected, actual])
 
-    if no_err:
-        cprint(f'passed test in state {cur_state} in route {tester.cur_route + 1}.', 'green')
+    if at_correct_time and at_correct_state:
         passed_tests += 1
     total_tests += 1
 

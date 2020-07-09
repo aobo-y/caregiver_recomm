@@ -61,16 +61,18 @@ class ScheduledEventTester:
             self.cur_state_idx_in_route += 1
 
     def at_correct_state(self, q):
+        return self.config[self.cur_state_index][3](q)[0]
+
+    def verify_state(self, q):
         return self.config[self.cur_state_index][3](q)
 
     def at_expected_time(self, now):
         cur_state = self.cur_state_index
         expected = self.start_time + datetime.timedelta(
-            *convert_time(self.config[cur_state][0]))
+            minutes=self.config[cur_state][0])
 
-        expected_earliest = expected - datetime.timedelta(*convert_time(self.config[cur_state][1]))
-        expected_latest = expected - datetime.timedelta(*convert_time(self.config[cur_state][2]))
-
+        expected_earliest = expected - datetime.timedelta(minutes=self.config[cur_state][1])
+        expected_latest = expected + datetime.timedelta(minutes=self.config[cur_state][2])
         return now >= expected_earliest and now <= expected_latest
 
     @property
