@@ -92,9 +92,13 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False, test_num_repeat=1):
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False, test_num_repeat=1, test_num_events=0):
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
+
+        self.test_mode = test
+        self.test_num_repeat = test_num_repeat
+        self.test_num_events = test_num_events
 
         self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
         if server_config:
@@ -104,9 +108,6 @@ class Recommender:
 
         self.mode = mode
         self.mock = mock
-
-        self.test_mode = test
-        self.test_num_repeat = test_num_repeat
 
         if self.mock:
             self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
@@ -336,9 +337,9 @@ class Recommender:
         Send the morning message at 10 am
         '''
         global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT
-        
-        time.sleep(180)
 
+        if not self.test_mode:
+            time.sleep(180)
 
         # Default message time
         morn_hour = 10
@@ -348,98 +349,96 @@ class Recommender:
 
         # get start time from deployment
 
-        try:
-            con = None
-            con = sqlite3.connect(
-                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
-            cursorObj = con.cursor()
+        if not self.test_mode:
+            try:
+                con = None
+                con = sqlite3.connect(
+                    'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+                cursorObj = con.cursor()
 
-            table_name = 'RESIDENTS_DATA'
-            # select the latest deploymnet by ordering table by created date
-            #must select the second row with 1, 1 because there is both caregivee and caregiver, (time goes in caregiver)
-            cursorObj.execute("SELECT * FROM " + table_name +
-                              " ORDER BY CREATED_DATE DESC LIMIT 1, 1")
-
-
-            # extract start time and end time
-            start_row, end_row = cursorObj.fetchall()[0][11:13]
-            start_hour, start_minute = [int(t) for t in start_row.split(':')]
-            end_hour, end_minute = [int(t) for t in end_row.split(':')]
+                table_name = 'RESIDENTS_DATA'
+                # select the latest deploymnet by ordering table by created date
+                #must select the second row with 1, 1 because there is both caregivee and caregiver, (time goes in caregiver)
+                cursorObj.execute("SELECT * FROM " + table_name +
+                                " ORDER BY CREATED_DATE DESC LIMIT 1, 1")
 
 
-            # For demonstration purposes, morning message sent 1 minute after start, evening message sent 30 minutes before end time
-            # this will be modified later
-            # the following is just for demo purposes:
-            if start_minute == 59:
-                morn_hour = start_hour + 1
-                morn_min = 0
-            else:
-                morn_hour = start_hour
-                morn_min = start_minute + 1
-            if end_minute >= 30:
-                ev_hour = end_hour
-                ev_min = end_minute - 30
-            else:
-                ev_hour = end_hour - 1
-                ev_min = 30 + end_minute
-
-        except Exception as e:
-            log('Read SQLite DB error:', e)
-        finally:
-            if con:
-                con.close()
+                # extract start time and end time
+                start_row, end_row = cursorObj.fetchall()[0][11:13]
+                start_hour, start_minute = [int(t) for t in start_row.split(':')]
+                end_hour, end_minute = [int(t) for t in end_row.split(':')]
 
 
-        # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
-        # #time.sleep(10)
-        # morn_hour = 10
-        # morn_min = 20
-        # ev_hour = 23
-        # ev_min = 22
+                # For demonstration purposes, morning message sent 1 minute after start, evening message sent 30 minutes before end time
+                # this will be modified later
+                # the following is just for demo purposes:
+                if start_minute == 59:
+                    morn_hour = start_hour + 1
+                    morn_min = 0
+                else:
+                    morn_hour = start_hour
+                    morn_min = start_minute + 1
+                if end_minute >= 30:
+                    ev_hour = end_hour
+                    ev_min = end_minute - 30
+                else:
+                    ev_hour = end_hour - 1
+                    ev_min = 30 + end_minute
+
+            except Exception as e:
+                log('Read SQLite DB error:', e)
+            finally:
+                if con:
+                    con.close()
+
+            # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
+            # #time.sleep(10)
+            # morn_hour = 10
+            # morn_min = 20
+            # ev_hour = 23
+            # ev_min = 22
 
         TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
         TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
 
-        schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')] if not self.test_mode else [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')]  # (hour, event_id)
+        schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')] # (hour, event_id)
 
         start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
 
         # check where you are relative the interval of time
-        for delta, _ in schedule_evts:
-            if start_today + delta < datetime.now():
-                evt_count += 1
-            else:
-                break
+        if not self.test_mode:
+            for delta, _ in schedule_evts:
+                if start_today + delta < datetime.now():
+                    evt_count += 1
+                else:
+                    break
 
         while True:
             idx = evt_count % len(schedule_evts)
             delta, event_id = schedule_evts[idx]
-            next_evt_time = delta + datetime.now().replace(hour=0, minute=0,
-                                                           second=0, microsecond=0)
-
-            now = datetime.now()
-
-            if next_evt_time < now:
-                next_evt_time += timedelta(days=1)
-
-            next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
-            log(f'Sleep till next schedule event: {next_evt_time_str}')
-
             if not self.test_mode: # don't need to wait if test mode
+                next_evt_time = delta + datetime.now().replace(hour=0, minute=0,
+                                                           second=0, microsecond=0)
+                now = datetime.now()
+
+                if next_evt_time < now:
+                    next_evt_time += timedelta(days=1)
+                next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
+
+                log(f'Sleep till next schedule event: {next_evt_time_str}')
                 time.sleep((next_evt_time - now).total_seconds())
+            elif evt_count > 0:
+                time.sleep(0.2 * 60)
 
             weekly_survey_count = 0
             #weekly_survey_count = 6
-
             try:
                 # Sending morning messages logic
                 if event_id == 'morning message':
                     #Send the intro morning message
                     message = 'morning:intro:1'
                     intro_answer = self.call_poll_ema(message, all_answers=True) #0.0 or -1.0
-
-
                     #send the morning message and positive aspects message---------------
                     send_count = 0
                     #pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -498,7 +497,6 @@ class Recommender:
 
                     #reset
                     DAILY_RECOMM_DICT = {}
-
                     #choose category of encouragement messages to send
                     encourage_dict = {'general': 8, 'success': 2, 'unsuccess': 2, 'unsuccessmult': 2,'successmult':1}
                     randnum3 = random.randint(1, encourage_dict[encourage_category])
@@ -590,7 +588,7 @@ class Recommender:
 
 
                 #Weekly Survey--------- if one week has passed! one week has passed
-                if weekly_survey_count >= 7 if not self.test_mode else self.test_num_repeat:
+                if weekly_survey_count >= (7 if not self.test_mode else 1):
                     #weekly survey question ---------
                     weekly_survey_count = 0
 
@@ -624,9 +622,8 @@ class Recommender:
                     message = 'weekly:msgetime:1' # always send the same question
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
                     good_time = self.call_poll_ema(message,answer_bank)#multiple choice
-
                     # if no: 0.0(they want more time between questions), if yes 1.0, no change
-                    if good_time == 0.0:
+                    if good_time == 0:
                         message = 'weekly:msgetime:no:1'  # always send the same survey
                         number_ques = self.call_poll_ema(message,all_answers=True) #multiple choice
 
@@ -685,23 +682,22 @@ class Recommender:
                 log('Send scheduled action error:', error)
             finally:
                 #send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm='false')
+                _ = call_ema('1', '995', alarm='false', test=True)
 
             evt_count += 1
+            if self.test_mode and evt_count >= self.test_num_events:
+                return
 
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3):
-
         req_id = None
-
         send_count = 0
         #send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
 
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
-            req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg)
-
-            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, POLL_TIME, 
-            duration= 300 if not self.test_mode else 3)
+            req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
+            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, 
+            duration= (POLL_TIME if not self.test_mode else 20), freq=(5 if not self.test_mode else 1), test_mode=self.test_mode)
             #answer: None, if nothing is selected...reload
 
             #any answer other than None

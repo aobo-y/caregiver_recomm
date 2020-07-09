@@ -34,7 +34,7 @@ class ScheduledEventTester:
         self.recommender_params = (5, server_config, mock, mode)
         self.__initialize_in_cur_route()
 
-        self.recommender = Recommender(test=True)
+        self.recommender = Recommender(test=True, test_num_events=len(self.routes))
         # self.recommender.start()
 
     @property

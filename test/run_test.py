@@ -31,9 +31,7 @@ one entry of the config list is composed of:
 @app.route('/')
 def handler():
     global tester
-    print('handler')
     lock.acquire()
-    print('handler')
 
     if tester.finished:
         lock.release()
@@ -79,7 +77,7 @@ def handler():
             time.sleep(0.2 * 60 * 2)
             # lock.acquire()
             if state_idx == tester.cur_state_idx_in_route and route == tester.cur_route:
-                cprint(f'Error in state {state + 1} in route {route + 1}: did not receive the next state in appropriate time', 'red')
+                cprint(f'Error in state {state} in route {route + 1}: did not receive the next state in appropriate time', 'red')
             # lock.release()
 
         check_after = Thread(target=check_change)

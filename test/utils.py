@@ -37,8 +37,8 @@ def verify_state(q, messages=None, n=None):
     if len(message_name) == 0 or len(message_name[0]) == 0:
         return False
     m = message_name[0][0].split(':')
-    print(m)
-    print(messages)
+    print(f'[verify state] received: {m}')
+    print(f'[verify state] expected: {messages}')
     for i in range(len(m)):
         if re.match('^[1-9]+$', m[i]) != None:
             if i != len(m) - 1: 
