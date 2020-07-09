@@ -77,11 +77,10 @@ class ConfigMaker:
     def __len__(self):
         return len(self._config)
     
-def generate_config():
-    interv = 0.1
+def generate_config(interv, day_repeat):
     c = ConfigMaker()
     
-    for i in range(1):
+    for i in range(day_repeat):
         # morning message
         for j in range(5): 
             c.add_state(0, interv, interv, j, [1], ["1", "2"])

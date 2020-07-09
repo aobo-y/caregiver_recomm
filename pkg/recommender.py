@@ -92,13 +92,16 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', test=False, test_num_repeat=1, test_num_events=0):
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', 
+    test=False, test_config=None):
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
 
         self.test_mode = test
-        self.test_num_repeat = test_num_repeat
-        self.test_num_events = test_num_events
+        if test:
+            self.test_day_repeat = test_config['day_repeat']
+            self.test_week_repeat = test_config['week_repeat']
+            self.test_time_interval = test_config['time_interval']
 
         self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
         if server_config:
@@ -414,6 +417,8 @@ class Recommender:
                 else:
                     break
 
+        weekly_survey_count = 0
+
         while True:
             idx = evt_count % len(schedule_evts)
             delta, event_id = schedule_evts[idx]
@@ -428,10 +433,10 @@ class Recommender:
 
                 log(f'Sleep till next schedule event: {next_evt_time_str}')
                 time.sleep((next_evt_time - now).total_seconds())
-            elif evt_count > 0:
-                time.sleep(0.1 * 60)
+            elif evt_count % len(schedule_evts) != 0:
+                time.sleep(self.test_time_interval)
 
-            weekly_survey_count = 0
+            # weekly_survey_count = 0 <- should this be outside the loop?
             #weekly_survey_count = 6
             try:
                 # Sending morning messages logic
@@ -588,7 +593,8 @@ class Recommender:
 
 
                 #Weekly Survey--------- if one week has passed! one week has passed
-                if weekly_survey_count >= (7 if not self.test_mode else 1):
+                print(self.test_day_repeat)
+                if weekly_survey_count >= (7 if not self.test_mode else self.test_day_repeat):
                     #weekly survey question ---------
                     weekly_survey_count = 0
 
@@ -685,7 +691,7 @@ class Recommender:
                 _ = call_ema('1', '995', alarm='false', test=True)
 
             evt_count += 1
-            if self.test_mode and evt_count >= self.test_num_events * len(schedule_evts):
+            if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
                 return
 
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3):

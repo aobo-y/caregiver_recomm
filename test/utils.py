@@ -60,11 +60,10 @@ def verify_state(q, messages=None, n=None):
             return (False, *t)
     return (False, *t)
 
-def convert_time(d):
+def convert_time(sec):
     """
     convert time from total minutes to day, hour, minutes
     """
-    sec = int(60 * d)
     day = sec // (24 * 60 * 60)
     hour = (sec % (24 * 60 * 60)) // (60 * 60)
     minute = (sec % (60 * 60)) // 60

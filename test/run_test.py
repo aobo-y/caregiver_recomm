@@ -14,16 +14,17 @@ from config import generate_config
 from scheduled_event_tester import ScheduledEventTester
 from utils import query_db, get_message_info
 
+total_tests = 0
+passed_tests = 0
+interval = 3
+day_repeat = 1
+
 app = Flask(__name__)
 lock = Lock()
-tester = ScheduledEventTester()
+tester = ScheduledEventTester(interval, day_repeat)
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
-
-total_tests = 0
-passed_tests = 0
-interval = 0.1
 
 def log(state_info, time_err_info=None, state_err_info=None):
     time_err_str = 'received action in wrong time, expect to receive at {}, ' \
@@ -89,7 +90,7 @@ def handler():
         route = tester.cur_route
 
         def check_change():
-            time.sleep(interval * 60 * 2)
+            time.sleep(interval * 2)
             # lock.acquire()
             if state_idx == tester.cur_state_idx_in_route and route == tester.cur_route:
                 cprint(f'Error in state {state} in route {route + 1}: \

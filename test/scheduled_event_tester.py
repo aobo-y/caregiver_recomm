@@ -10,8 +10,8 @@ from config import generate_config
 from utils import convert_time
 
 class ScheduledEventTester:
-    def __init__(self, server_config=None, mock=None, mode='default'):
-        self.config: List[List[Any]] = generate_config()
+    def __init__(self, interval, day_repeat, server_config=None, mock=None, mode='default'):
+        self.config: List[List[Any]] = generate_config(interval, day_repeat)
         self.routes: List[List[List[int]]] = []
         self.cur_state_idx_in_route = 0
         self.cur_route = 0
@@ -31,8 +31,9 @@ class ScheduledEventTester:
         self.recommender_params = (5, server_config, mock, mode)
         self.__initialize_in_cur_route()
 
-        self.recommender = Recommender(test=True, test_num_events=len(self.routes))
-        # self.recommender.start()
+        self.recommender = Recommender(test=True, 
+            test_config={'day_repeat': day_repeat, 'week_repeat': len(self.routes), 
+            'time_interval' : interval})
 
     @property
     def cur_state_index(self) -> int:
