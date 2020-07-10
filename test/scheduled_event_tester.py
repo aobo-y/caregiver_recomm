@@ -25,6 +25,7 @@ class ScheduledEventTester:
                 if  (cur[0] + cur[2]) < (prev[0] - prev[1]):
                     cprint(f'Warning: bad test config, event {prev + 1} will always be later than event {cur + 1}.', 'red')
 
+        print(f'[Schedule Event Tester] Generates {len(self.routes)} routes.')
         self.start_time = None
         self.finished = False
 
@@ -135,7 +136,7 @@ class ScheduledEventTester:
         return self.__find_all_routes_helper(0, [], None)
 
 if __name__ == '__main__':
-    tester = ScheduledEventTester()
+    tester = ScheduledEventTester(1, 1)
     print(f'[schedule_event_tester.py] # routes {len(tester.routes)}')
     for i in range(len(tester.routes)):
         print(i + 1)

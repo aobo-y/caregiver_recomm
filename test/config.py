@@ -4,9 +4,9 @@ import random
 
 """
 one entry of the config list is composed of:
-1. time as minute (10hr -> 600) after start
-2. time delta in minute that can tolerate before the time in 1
-3. time delta in minute that can tolerate after the time in 1
+1. time as seconds (10hr -> 600) after start
+2. time delta in seconds that can tolerate before the time in 1
+3. time delta in seconds that can tolerate after the time in 1
 4. function that decides whether the url dict meets the condition, true means correct state
 5. next nodes, please note that **NO LOOPS ARE ALLOWED**; for convenience, start node must at index 0
 6. choices to return to server; if multiple children, should match with #5
@@ -131,7 +131,7 @@ def generate_config(interv, day_repeat):
 
     chosen_states = random.sample(range(len(c) - 1), 2)
 
-    # c.make_no_response_states(3, states=chosen_states)
+    c.make_no_response_states(2, states=chosen_states)
 
     return c.get_config()
 
@@ -139,7 +139,7 @@ def expect_finish_time(config):
     pass
 
 if __name__ == '__main__':
-    c = generate_config()
+    c = generate_config(1, 1)
     for i in range(len(c)):
         c[i][3] = 0
         print(str(i) + ' ' + str(c[i]) + ',')

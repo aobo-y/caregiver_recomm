@@ -16,7 +16,7 @@ from utils import query_db, get_message_info
 
 total_tests = 0
 passed_tests = 0
-interval = 3
+interval = 1
 day_repeat = 1
 
 app = Flask(__name__)
@@ -64,7 +64,6 @@ def handler():
 
     now = datetime.datetime.now()
     at_correct_time = tester.at_expected_time(now)
-    
     at_correct_state, expected, actual = tester.verify_state(q)
 
     log([cur_state, tester.cur_route + 1], 
@@ -76,13 +75,15 @@ def handler():
     total_tests += 1
 
     ans = tester.cur_state_response
+
+    if ans != None:
+        primkey = f'{q["id"]}:{q["empathid"]}'
+        retrieval_code = get_message_info(q)["retrieval_object"]
+
+        query_db(f'INSERT INTO ema_data(suid, primkey, variablename, answer, language, mode, version, completed) \
+            VALUES ("{q["suid"]}", "{primkey}", "{retrieval_code}", "{ans}", 1, 3, 1, 1) ')
+    
     tester.increment()
-
-    primkey = f'{q["id"]}:{q["empathid"]}'
-    retrieval_code = get_message_info(q)["retrieval_object"]
-
-    query_db(f'INSERT INTO ema_data(suid, primkey, variablename, answer, language, mode, version, completed) \
-         VALUES ("{q["suid"]}", "{primkey}", "{retrieval_code}", "{ans}", 1, 3, 1, 1) ')
 
     if not tester.finished:
         state_idx = tester.cur_state_idx_in_route
@@ -91,11 +92,13 @@ def handler():
 
         def check_change():
             time.sleep(interval * 2)
-            # lock.acquire()
+            lock.acquire()
+            if tester.finished:
+                return
             if state_idx == tester.cur_state_idx_in_route and route == tester.cur_route:
-                cprint(f'Error in state {state} in route {route + 1}: \
-                    did not receive the next state in appropriate time', 'red')
-            # lock.release()
+                cprint(f'Error in state {state} in route {route + 1}:' \
+                    'did not receive the next state in appropriate time', 'red')
+            lock.release()
 
         check_after = Thread(target=check_change)
         check_after.daemon = True

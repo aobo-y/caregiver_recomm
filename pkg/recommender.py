@@ -593,7 +593,6 @@ class Recommender:
 
 
                 #Weekly Survey--------- if one week has passed! one week has passed
-                print(self.test_day_repeat)
                 if weekly_survey_count >= (7 if not self.test_mode else self.test_day_repeat):
                     #weekly survey question ---------
                     weekly_survey_count = 0
@@ -703,7 +702,7 @@ class Recommender:
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
             req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
             answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, 
-            duration= (POLL_TIME if not self.test_mode else 20), freq=(5 if not self.test_mode else 1), test_mode=self.test_mode)
+            duration= (POLL_TIME if not self.test_mode else 0.1), freq=(5 if not self.test_mode else 0.02), test_mode=self.test_mode)
             #answer: None, if nothing is selected...reload
 
             #any answer other than None
