@@ -11,8 +11,10 @@ import pymysql
 import logging
 
 from config import generate_config
-from scheduled_event_tester import ScheduledEventTester
+from tester import Tester
 from utils import query_db, get_message_info
+from config import ConfigMaker
+from pkg.recommender import Recommender
 
 total_tests = 0
 passed_tests = 0
@@ -21,7 +23,12 @@ day_repeat = 1
 
 app = Flask(__name__)
 lock = Lock()
-tester = ScheduledEventTester(interval, day_repeat)
+config = generate_config(interval, day_repeat)
+tester = Tester(generate_config(interval, day_repeat))
+
+recommender = Recommender(test=True, 
+    test_config={'day_repeat': day_repeat, 'week_repeat': len(tester.routes), 
+    'time_interval' : interval})
 
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)

@@ -2,7 +2,7 @@
 ## Usage
 ### If you want to change business logic
 1. Edit `msg_config.json`, put all messages that will appear in the questions that will be sent to user. The format for each entry is:
-   ```
+   ```js
    {
        'prefix_1' : {
            'postfix_1' : [number_from, number_to],
@@ -20,7 +20,7 @@
    The message name can contain no number, a message like this should have an empty array to correspond to this.
    The numbers are inclusive.
 2. Edit `generate_config` in [config.py](config.py), return a state config array in which each entry is an array with:
-   1. time as seconds (10hr -> 600) after start
+   1. time as seconds after start
    2. time delta in seconds that can tolerate before the time in 1
    3. time delta in seconds that can tolerate after the time in 1
    4. function that decides whether the url dict meets the condition, true means correct state

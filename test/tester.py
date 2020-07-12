@@ -5,13 +5,12 @@ import datetime
 import copy
 from typing import List, Any
 from termcolor import cprint
-from pkg.recommender import Recommender
-from config import generate_config
 from utils import convert_time
 
-class ScheduledEventTester:
-    def __init__(self, interval, day_repeat, server_config=None, mock=None, mode='default'):
-        self.config: List[List[Any]] = generate_config(interval, day_repeat)
+class Tester:
+    def __init__(self, config):
+        # self.config: List[List[Any]] = generate_config(interval, day_repeat)
+        self.config = config
         self.routes: List[List[List[int]]] = []
         self.cur_state_idx_in_route = 0
         self.cur_route = 0
@@ -29,12 +28,7 @@ class ScheduledEventTester:
         self.start_time = None
         self.finished = False
 
-        self.recommender_params = (5, server_config, mock, mode)
         self.__initialize_in_cur_route()
-
-        self.recommender = Recommender(test=True, 
-            test_config={'day_repeat': day_repeat, 'week_repeat': len(self.routes), 
-            'time_interval' : interval})
 
     @property
     def cur_state_index(self) -> int:
@@ -89,11 +83,6 @@ class ScheduledEventTester:
         self.start_time = datetime.datetime.now()
 
     def __find_all_routes_helper(self, idx: int, prevRoutes: List[List[List[int]]], choice_to_here):
-        # print(idx)
-        # if len(graph[idx]) <= 1:
-        #     arr = prevRoutes
-        # else:
-        #     arr = copy.deepcopy(prevRoutes)
         arr = copy.deepcopy(prevRoutes)
         result: List[List[List[int]]] = []
 
@@ -136,7 +125,7 @@ class ScheduledEventTester:
         return self.__find_all_routes_helper(0, [], None)
 
 if __name__ == '__main__':
-    tester = ScheduledEventTester(1, 1)
+    tester = Tester(1, 1)
     print(f'[schedule_event_tester.py] # routes {len(tester.routes)}')
     for i in range(len(tester.routes)):
         print(i + 1)
