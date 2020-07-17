@@ -8,7 +8,7 @@ from termcolor import cprint
 from utils import convert_time
 
 class Tester:
-    def __init__(self, config):
+    def __init__(self, config, time_between_routes=0):
         # self.config: List[List[Any]] = generate_config(interval, day_repeat)
         self.config = config
         self.routes: List[List[List[int]]] = []
@@ -27,6 +27,7 @@ class Tester:
         print(f'[Schedule Event Tester] Generates {len(self.routes)} routes.')
         self.start_time = None
         self.finished = False
+        self.time_between_routes = time_between_routes
 
         self.__initialize_in_cur_route()
 
@@ -52,7 +53,7 @@ class Tester:
                 # use new recommender, renew start day
                 self.cur_state_idx_in_route = 0
                 self.cur_route += 1
-                self.__initialize_in_cur_route()
+                self.__initialize_in_cur_route(time_between_routes=self.time_between_routes)
         else:
             self.cur_state_idx_in_route += 1
 
@@ -65,10 +66,11 @@ class Tester:
     def at_expected_time(self, now):
         cur_state = self.cur_state_index
         expected = self.start_time + datetime.timedelta(
-            minutes=self.config[cur_state][0])
+            seconds=self.config[cur_state][0])
 
-        expected_earliest = expected - datetime.timedelta(minutes=self.config[cur_state][1])
-        expected_latest = expected + datetime.timedelta(minutes=self.config[cur_state][2])
+        expected_earliest = expected - datetime.timedelta(seconds=self.config[cur_state][1])
+        expected_latest = expected + datetime.timedelta(seconds=self.config[cur_state][2])
+
         return now >= expected_earliest and now <= expected_latest
 
     @property
@@ -77,10 +79,10 @@ class Tester:
         return self.start_time + datetime.timedelta(
             *convert_time(self.config[cur_state][0]))
 
-    def __initialize_in_cur_route(self):
+    def __initialize_in_cur_route(self, time_between_routes=0):
         self.cur_state_idx_in_route = 0
         # self.routes[self.cur_route][self.cur_state_idx_in_route][0]
-        self.start_time = datetime.datetime.now()
+        self.start_time = datetime.datetime.now() + datetime.timedelta(seconds=time_between_routes)
 
     def __find_all_routes_helper(self, idx: int, prevRoutes: List[List[List[int]]], choice_to_here):
         arr = copy.deepcopy(prevRoutes)

@@ -17,8 +17,11 @@ def query_db(query, ret=False):
         return c.fetchall()
 
 def get_message_info(q):
+    return all_messages[get_message_name(q)]
+
+def get_message_name(q):
     name = query_db(f'select QuestionName from reward_data where empathid="{q["empathid"]}"', ret=True)
-    return all_messages[name[0][0]]
+    return name[0][0]
 
 def verify_state(q, messages=None, n=None):
     """
@@ -41,7 +44,7 @@ def verify_state(q, messages=None, n=None):
 
     m = message_name[0][0].split(':')
 
-    t = (deepcopy(msg_config[n]), message_name[0][0])
+    t = (deepcopy(messages), message_name[0][0])
     for i in range(len(m)):
         if re.match('^[1-9]+$', m[i]) != None:
             if i != len(m) - 1: 

@@ -10,7 +10,6 @@ from flask import Flask, request
 import pymysql
 import logging
 
-from config import generate_config
 from tester import Tester
 from utils import query_db, get_message_info
 from config import ConfigMaker
@@ -18,20 +17,73 @@ from pkg.recommender import Recommender
 
 total_tests = 0
 passed_tests = 0
-interval = 1
+interval = 5
 day_repeat = 1
 
 app = Flask(__name__)
-lock = Lock()
-config = generate_config(interval, day_repeat)
-tester = Tester(generate_config(interval, day_repeat))
 
-recommender = Recommender(test=True, 
-    test_config={'day_repeat': day_repeat, 'week_repeat': len(tester.routes), 
-    'time_interval' : interval})
+def make_config(interv, day_repeat):
+    c = ConfigMaker()
 
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
+    day = 24 * 60 * 60 / 4680
+    morning = 1 * 60 * 60 / 4680
+    evening = (23 - 9) * 60 * 60 / 4680
+
+    for i in range(day_repeat):
+        # morning message
+        for j in range(5): 
+            c.add_state(i * day + morning, interv, interv, j, [1], ["1", "2"])
+
+        eve_time = i * day + evening
+        # evening message
+        # intro
+        c.add_state(eve_time, interv, interv, 5, [1], ["1", "2"])
+        # likert
+        c.add_state(eve_time, interv, interv, 6, [1], ["1", "2"])
+        # daily goal
+        c.add_state(eve_time, interv, interv, 7, [1, 2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, 8, [2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, 9, [1], ["1", "2"])
+
+        # ask about recommendation
+        # stress_manag1
+        c.add_state(eve_time, interv, interv, 10, [1, 2], ["1", "2"])
+        # stress_managyes1
+        c.add_state(eve_time, interv, interv, 11, [2], ["1", "2"])
+        # stress_managno1
+        c.add_state(eve_time, interv, interv, 12, [2], ["1", "2"])
+
+        # system_helpful
+        c.add_state(eve_time, interv, interv, 13, [1], ["1", "2"])
+    
+    # weekly survey
+    c.add_state(eve_time, interv, interv, 14, [1], ["1", "2"])
+
+    # weekly message 1
+    c.add_state(eve_time, interv, interv, 15, [2, 1], ["1", "2"])
+    # weekly message no
+    c.add_state(eve_time, interv, interv, 16, [1], ["1", "2"])
+
+    # weekly msgetime
+    c.add_state(eve_time, interv, interv, 17, [2, 1], ["1", "2"])
+    # weekly msgetime no
+    c.add_state(eve_time, interv, interv, 18, [1], ["1", "2"])
+
+    # weekly startstop 1
+    c.add_state(eve_time, interv, interv, 19, [None, 1], ["1", "2"])
+    # weekly startstop start 1
+    c.add_state(eve_time, interv, interv, 20, [1], ["1", "2"])
+    # weekly startstop stop 1
+    c.add_state(eve_time, interv, interv, 21, [], ["1", "2"])
+
+    # for i in range(l):
+    #     make_no_response_states(config[i])
+
+    # chosen_states = random.sample(range(len(c) - 1), 2)
+
+    c.make_no_response_states(2, states=[1])
+
+    return c.get_config()
 
 def log(state_info, time_err_info=None, state_err_info=None):
     time_err_str = 'received action in wrong time, expect to receive at {}, ' \
@@ -116,3 +168,14 @@ def handler():
 
     lock.release()
     return ''
+
+lock = Lock()
+config = make_config(interval, day_repeat)
+tester = Tester(config, time_between_routes=8)
+
+recommender = Recommender(test=True, 
+    time_config={'scale': 4680, 'fake_start': True, 'start_hr': 9},
+    schedule_evt_test_config={'day_repeat': day_repeat, 'week_repeat': len(tester.routes)})
+
+logger = logging.getLogger('werkzeug')
+logger.setLevel(logging.ERROR)

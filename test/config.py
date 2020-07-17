@@ -17,7 +17,7 @@ class ConfigMaker:
         self._cur = 0
         self._config = []
     
-    def add_state(self, time, time_before, time_after, message_no, next_states_increment, choices):
+    def add_state(self, time, time_before, time_after, message, next_states_increment, choices):
         """
         adds state to config; for convenience, it is recommended to put the default next-state at index 0
         """
@@ -30,9 +30,13 @@ class ConfigMaker:
                 next_states.append(self._cur + n)
             else:
                 next_states.append(None)
-
-        self._config.append([time, time_before, time_after, 
-            lambda x: verify_state(x, n=message_no), next_states, choices])
+    
+        if type(message) == int:
+            self._config.append([time, time_before, time_after, 
+                lambda x: verify_state(x, n=message), next_states, choices])
+        else:
+            self._config.append([time, time_before, time_after, 
+                lambda x: verify_state(x, messages=message), next_states, choices])
 
         self._cur += 1
 
@@ -76,70 +80,3 @@ class ConfigMaker:
 
     def __len__(self):
         return len(self._config)
-    
-def generate_config(interv, day_repeat):
-    c = ConfigMaker()
-    
-    for i in range(day_repeat):
-        # morning message
-        for j in range(5): 
-            c.add_state(0, interv, interv, j, [1], ["1", "2"])
-
-        # evening message
-        # intro
-        c.add_state(interv, interv, interv, 5, [1], ["1", "2"])
-        # likert
-        c.add_state(interv, interv, interv, 6, [1], ["1", "2"])
-        # daily goal
-        c.add_state(interv, interv, interv, 7, [1, 2], ["1", "2"])
-        c.add_state(interv, interv, interv, 8, [2], ["1", "2"])
-        c.add_state(interv, interv, interv, 9, [1], ["1", "2"])
-
-        # ask about recommendation
-        # stress_manag1
-        c.add_state(interv, interv, interv, 10, [1, 2], ["1", "2"])
-        # stress_managyes1
-        c.add_state(interv, interv, interv, 11, [2], ["1", "2"])
-        # stress_managno1
-        c.add_state(interv, interv, interv, 12, [2], ["1", "2"])
-
-        # system_helpful
-        c.add_state(interv, interv, interv, 13, [1], ["1", "2"])
-    
-    # weekly survey
-    c.add_state(interv, interv, interv, 14, [1], ["1", "2"])
-
-    # weekly message 1
-    c.add_state(interv, interv, interv, 15, [2, 1], ["1", "2"])
-    # weekly message no
-    c.add_state(interv, interv, interv, 16, [1], ["1", "2"])
-
-    # weekly msgetime
-    c.add_state(interv, interv, interv, 17, [2, 1], ["1", "2"])
-    # weekly msgetime no
-    c.add_state(interv, interv, interv, 18, [1], ["1", "2"])
-
-    # weekly startstop 1
-    c.add_state(interv, interv, interv, 19, [None, 1], ["1", "2"])
-    # weekly startstop start 1
-    c.add_state(interv, interv, interv, 20, [1], ["1", "2"])
-    # weekly startstop stop 1
-    c.add_state(interv, interv, interv, 21, [], ["1", "2"])
-
-    # for i in range(l):
-    #     make_no_response_states(config[i])
-
-    # chosen_states = random.sample(range(len(c) - 1), 2)
-
-    c.make_no_response_states(2, states=[1])
-
-    return c.get_config()
-
-def expect_finish_time(config):
-    pass
-
-if __name__ == '__main__':
-    c = generate_config(1, 1)
-    for i in range(len(c)):
-        c[i][3] = 0
-        print(str(i) + ' ' + str(c[i]) + ',')

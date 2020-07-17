@@ -13,6 +13,7 @@ from .scenario import Scenario
 from .stats import Stats
 from .log import log
 from .ema import call_ema, poll_ema, get_conn
+from .time import Time
 
 ACTIONS = ['timeout:1','timeout:2','timeout:3','timeout:4','timeout:5','timeout:6','timeout:7','timeout:8','timeout:9',
            'breathing:1','breathing:2','breathing:3','breathing:4','breathing:5','breathing:6','breathing:7','breathing:8',
@@ -92,16 +93,22 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, mode='default', 
-    test=False, test_config=None):
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, 
+    mode='default', test=False, time_config=None, schedule_evt_test_config=None):
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
 
         self.test_mode = test
-        if test:
-            self.test_day_repeat = test_config['day_repeat']
-            self.test_week_repeat = test_config['week_repeat']
-            self.test_time_interval = test_config['time_interval']
+        if time_config != None:
+            self.timer = Time(time_config['scale'], 
+            time_config['fake_start'],
+            time_config['start_hr'], 0, 0)
+        else:
+            self.timer = Time(1)
+
+        if test and schedule_evt_test_config != None:
+            self.test_day_repeat = schedule_evt_test_config['day_repeat']
+            self.test_week_repeat = schedule_evt_test_config['week_repeat']
 
         self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
         if server_config:
@@ -115,16 +122,17 @@ class Recommender:
         if self.mock:
             self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
-        self.last_action_time = datetime.now().replace(year=2000)
+        self.last_action_time = self.timer.now().replace(year=2000)
 
         # initialize _schedule_evt()
-        schedule_thread = Thread(target=self._schedule_evt)
-        schedule_thread.daemon = True
-        schedule_thread.start()
-        self.schedule_thread = schedule_thread
+        if (not test) or (schedule_evt_test_config != None):
+            schedule_thread = Thread(target=self._schedule_evt)
+            schedule_thread.daemon = True
+            schedule_thread.start()
+            self.schedule_thread = schedule_thread
 
     def cooldown_ready(self):
-        return datetime.now() - self.last_action_time > self.action_cooldown
+        return self.timer.now() - self.last_action_time > self.action_cooldown
 
     def dispatch(self, speaker_id, evt):
         log('recommender receives event:', str(evt))
@@ -144,7 +152,7 @@ class Recommender:
     def _process_evt(self, speaker_id, evt):
         try:
             if self.mode == 'mood_checking':
-                self.last_action_time = datetime.now()
+                self.last_action_time = self.timer.now()
                 # dynamic message for moode checking
                 empathid, retrieval_object, qtype = call_ema(speaker_id, '995')
                 if not empathid:
@@ -163,7 +171,7 @@ class Recommender:
                     return
 
                 log('model gives action', action_idx)
-                self.last_action_time = datetime.now()
+                self.last_action_time = self.timer.now()
 
                 #daily limit
                 if MESSAGES_SENT_TODAY>=MAX_MESSAGES:
@@ -171,10 +179,10 @@ class Recommender:
                     return
 
                 #send only during acceptable time
-                current_time = timedelta(hours = datetime.now().hour, minutes= datetime.now().minute)
-                if current_time < TIME_MORN_DELT or current_time > TIME_EV_DELT:
+                current_time = timedelta(hours = self.timer.now().hour, minutes= self.timer.now().minute)
+                if  (current_time < TIME_MORN_DELT or current_time > TIME_EV_DELT):
                     log('Current time outside acceptable time interval')
-                    return
+                    return # (not self.test_mode) and
 
                 empathid = self._send_action(speaker_id, action_idx)
 
@@ -215,12 +223,12 @@ class Recommender:
         reward = None
 
         # send the blank message after recommendation
-        _ = call_ema('1', '995', alarm='false')
+        _ = call_ema('1', '995', alarm='false', test=self.test_mode)
 
         if 'enjoyable' in CURRENT_RECOMM_CATEGORY:
-            time.sleep(3600) #wait for 60 min if recommendation is enjoyable activity
+            self.timer.sleep(3600) #wait for 60 min if recommendation is enjoyable activity
         else:
-            time.sleep(1800) #wait for 30 min
+            self.timer.sleep(1800) #wait for 30 min
         #time.sleep(10)
 
         #post recommendation logic
@@ -228,7 +236,7 @@ class Recommender:
         answer_bank = [1.0,0.0,-1.0]
         # ask if stress management tip was done (yes no) question
         postrecomm_answer = self.call_poll_ema(message,answer_bank, speaker_id)
-
+        print(f'postrecomm_answer {postrecomm_answer}')
         # if done (Yes)
         if postrecomm_answer == 1.0:
             reward = 1.0
@@ -260,7 +268,7 @@ class Recommender:
             EXTRA_ENCRGMNT = ''
 
         # send the blank message
-        _ = call_ema('1', '995', alarm='false')
+        _ = call_ema('1', '995', alarm='false', test=self.test_mode)
 
         return reward
 
@@ -316,7 +324,7 @@ class Recommender:
         action = data['action']
         reward = data['reward']
         action_ucbs = json.dumps(data['action_ucbs'])
-        time = datetime.now()
+        time = self.timer.now()
 
         # inserting into ema_storing_data table
         # prepare query to insert into ema_storing_data table
@@ -342,7 +350,7 @@ class Recommender:
         global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT
 
         if not self.test_mode:
-            time.sleep(180)
+            self.timer.sleep(180)
 
         # Default message time
         morn_hour = 10
@@ -389,13 +397,13 @@ class Recommender:
                     ev_min = 30 + end_minute
 
             except Exception as e:
-                log('Read SQLite DB error:', e)
+                log('Read SQLite DB error:', e, timer=self.timer)
             finally:
                 if con:
                     con.close()
 
             # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
-            # #time.sleep(10)
+            # #self.timer.sleep(10)
             # morn_hour = 10
             # morn_min = 20
             # ev_hour = 23
@@ -406,35 +414,34 @@ class Recommender:
 
         schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')] # (hour, event_id)
 
-        start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        start_today = self.timer.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
 
         # check where you are relative the interval of time
-        if not self.test_mode:
-            for delta, _ in schedule_evts:
-                if start_today + delta < datetime.now():
-                    evt_count += 1
-                else:
-                    break
+
+        for delta, _ in schedule_evts:
+            if start_today + delta < self.timer.now():
+                evt_count += 1
+            else:
+                break
 
         weekly_survey_count = 0
 
         while True:
             idx = evt_count % len(schedule_evts)
             delta, event_id = schedule_evts[idx]
-            if not self.test_mode: # don't need to wait if test mode
-                next_evt_time = delta + datetime.now().replace(hour=0, minute=0,
-                                                           second=0, microsecond=0)
-                now = datetime.now()
+            # if not self.test_mode: # don't need to wait if test mode
+            next_evt_time = delta + self.timer.now().replace(hour=0, minute=0,
+                                                        second=0, microsecond=0)
+            now = self.timer.now()
 
-                if next_evt_time < now:
-                    next_evt_time += timedelta(days=1)
-                next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
+            if next_evt_time < now:
+                next_evt_time += timedelta(days=1)
+            next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
 
-                log(f'Sleep till next schedule event: {next_evt_time_str}')
-                time.sleep((next_evt_time - now).total_seconds())
-            elif evt_count % len(schedule_evts) != 0:
-                time.sleep(self.test_time_interval)
+            log(f'Sleep till next schedule event: {next_evt_time_str}', timer=self.timer)
+            print(next_evt_time - now)
+            self.timer.sleep((next_evt_time - now).total_seconds())
 
             # weekly_survey_count = 0 <- should this be outside the loop?
             #weekly_survey_count = 6
@@ -681,10 +688,10 @@ class Recommender:
                             # reset scheduled events
                             schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
 
-                log(f'Scheduled event sent: {event_id}')
+                log(f'Scheduled event sent: {event_id}', timer=self.timer)
 
             except Exception as error:
-                log('Send scheduled action error:', error)
+                log('Send scheduled action error:', error, timer=self.timer)
             finally:
                 #send the blank message after everything for both morning and evening messages-------------
                 _ = call_ema('1', '995', alarm='false', test=True)
