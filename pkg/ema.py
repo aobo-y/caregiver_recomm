@@ -74,7 +74,7 @@ def call_ema(id, suid='', message='', alarm='true'):
             db = get_conn()
             cursor = db.cursor()
 
-            insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded) \
+            insert_query = "INSERT INTO reward_data(empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded) \
                                   VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s','%s')" % \
                 (empathid, time_sent, suid, 'NA', -1.0,MESSAGE_SENT,qtype,MESSAGE_NAME,0)
             cursor.execute(insert_query)

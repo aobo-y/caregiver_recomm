@@ -20,7 +20,7 @@ ACTIONS = ['timeout:1','timeout:2','timeout:3','timeout:4','timeout:5','timeout:
 POLL_TIME = 120
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
-COOLDOWN_TIME = 1800 #30 min
+COOLDOWN_TIME = 300 #5 min
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
@@ -162,6 +162,9 @@ class Recommender:
                 if MESSAGES_SENT_TODAY>=MAX_MESSAGES:
                     log('Max amount of messages sent today')
                     return
+
+                #for testing
+                #time.sleep(360)
 
                 #send only during acceptable time
                 current_time = timedelta(hours = datetime.now().hour, minutes= datetime.now().minute)
@@ -387,17 +390,19 @@ class Recommender:
                 con.close()
 
 
-        # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
-        # #time.sleep(10)
-        # morn_hour = 10
-        # morn_min = 20
-        # ev_hour = 23
-        # ev_min = 22
+        # # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
+        # # #time.sleep(10)
+        # morn_hour = 4
+        # morn_min = 26
+        # ev_hour = 4
+        # ev_min = 31
 
         TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
         TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
 
+
         schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
+        weekly_day = 'Monday'
 
         start_today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
@@ -426,8 +431,6 @@ class Recommender:
             if not self.test_mode:
                 time.sleep((next_evt_time - now).total_seconds())
 
-            weekly_survey_count = 0
-            #weekly_survey_count = 6
 
             try:
                 # Sending morning messages logic
@@ -528,7 +531,6 @@ class Recommender:
 
                 # Sending evening messages logic
                 if event_id == 'evening message':
-                    weekly_survey_count+=1 #one day has passed
                     MESSAGES_SENT_TODAY = 0 #reset messages to 0
 
                     #send evening intro message -------
@@ -587,9 +589,8 @@ class Recommender:
 
 
                 #Weekly Survey--------- if one week has passed! one week has passed
-                if weekly_survey_count >= 7:
+                if datetime.today().strftime('%A') == weekly_day:
                     #weekly survey question ---------
-                    weekly_survey_count = 0
 
                     message = 'weekly:survey:1' # always send the same survey
                     weekly_answer = self.call_poll_ema(message,all_answers=True) #any answer mult or skipped: -1.0
