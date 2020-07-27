@@ -26,7 +26,7 @@ def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
 
 
-def call_ema(id, suid='', message='', alarm='true'):
+def call_ema(id, suid='', message='', alarm='true', test=False):
     global MESSAGE_SENT
     global CHOICES_SENT
     global MESSAGE_NAME
@@ -35,16 +35,16 @@ def call_ema(id, suid='', message='', alarm='true'):
     qtype = ''
 
     if message:
-        suid, retrieval_object, qtype = setup_message(message)
+        suid, retrieval_object, qtype = setup_message(message, test=test)
     # time sending the prequestion
     start_time = time.time()
     # date and time format of the time the prequestion is sent
     time_sent = str(datetime.datetime.fromtimestamp(int(start_time)))
 
     # items needed in url
-    empathid = '999|' + str(int(time.time()))
+    empathid = '999|' + str(int(time.time() * 100))
 
-    phone_url = 'http://191.168.0.106:2226'
+    phone_url = 'http://191.168.0.106:2226' if not test else 'http://127.0.0.1:5000'
     server_url = 'http://191.168.0.107/ema/ema.php'
     androidid = 'db7d3cdb88e1a62a'
     alarm = alarm
@@ -63,11 +63,6 @@ def call_ema(id, suid='', message='', alarm='true'):
         url_dict), safe=':={}/')  # encoding url quotes become %22
     url = phone_url + '/?q=' + q_dict_string
 
-    try:
-        _ = urllib.request.urlopen(url)
-    except http.client.BadStatusLine:  # EMA return non-TCP response
-        pass
-
     # connect to database for logging
     if suid != '995':#do not log blank question (empath is too fast duplicate)
         try:
@@ -84,11 +79,14 @@ def call_ema(id, suid='', message='', alarm='true'):
             db.rollback()
         finally:
             db.close()
-
+    try:
+        _ = urllib.request.urlopen(url)
+    except http.client.BadStatusLine:  # EMA return non-TCP response
+        pass
     return empathid, retrieval_object, qtype
 
 
-def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, freq=5):
+def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, freq=5, test_mode=False):
     answer = None #reload question case
     try:
         db = get_conn()
@@ -111,7 +109,6 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
                     answer = -1.0
                 else:
                     answer = cursor_fetch.split("'")[1]
-
                     #slide bar type
                     if question_type == 'slide bar':
                         #return the number from 0-10 that was chosen
@@ -163,11 +160,10 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
     finally:
         # ensure db closed, exception is raised to upper layer to handle
         db.close()
-
     return answer
 
 
-def setup_message(message_name, type='binary'):
+def setup_message(message_name, type='binary', test=False):
     global MESSAGE_SENT, CHOICES_SENT, MESSAGE_NAME
 
     #default
@@ -191,7 +187,7 @@ def setup_message(message_name, type='binary'):
         message_name = message_name.replace('[!]','')
 
     #open json with all prompts and their ids
-    with open("json_prompts.json", 'r') as file:
+    with open("../json_prompts.json", 'r') as file:
         json_prompts = json.load(file)
 
 
@@ -248,26 +244,27 @@ def setup_message(message_name, type='binary'):
     #changes the name in the message (must retrieve names from DeploymentInformation.db)
     caregiver_name = 'caregiver' #default
     care_recipient_name = 'care recipient' #default
-    try:
-        con = None
-        con = sqlite3.connect(
-            'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
-        cursorObj = con.cursor()
+    if not test:
+        try:
+            con = None
+            con = sqlite3.connect(
+                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+            cursorObj = con.cursor()
 
-        table_name = 'RESIDENTS_DATA'
+            table_name = 'RESIDENTS_DATA'
 
-        # must select first and second row by using 0,2
-        cursorObj.execute("SELECT * FROM " + table_name +
-                          " ORDER BY CREATED_DATE DESC LIMIT 0,2")
-        names = cursorObj.fetchall()
-        care_recipient_name = names[0][9]
-        caregiver_name = names[1][9]
+            # must select first and second row by using 0,2
+            cursorObj.execute("SELECT * FROM " + table_name +
+                            " ORDER BY CREATED_DATE DESC LIMIT 0,2")
+            names = cursorObj.fetchall()
+            care_recipient_name = names[0][9]
+            caregiver_name = names[1][9]
 
-    except Exception as e:
-        log('Read SQLite DB error:', e)
-    finally:
-        if con:
-            con.close()
+        except Exception as e:
+            log('Read SQLite DB error:', e)
+        finally:
+            if con:
+                con.close()
     #if the message uses a name, replace default with actual name from database
     if '[caregiver name]' in message:
         message = message.replace('[caregiver name]',caregiver_name)
