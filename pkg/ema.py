@@ -46,6 +46,7 @@ def call_ema(id, suid='', message='', alarm='true', test=False):
     phone_url = 'http://191.168.0.106:2226' if not test else 'http://127.0.0.1:5000'
     server_url = 'http://191.168.0.107/ema/ema.php'
     androidid = 'db7d3cdb88e1a62a'
+
     alarm = alarm
 
     # sending action to phone
@@ -250,6 +251,7 @@ def setup_message(message_name, type='binary', test=False):
             con = sqlite3.connect(
                 'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
             cursorObj = con.cursor()
+
 
             table_name = 'RESIDENTS_DATA'
 

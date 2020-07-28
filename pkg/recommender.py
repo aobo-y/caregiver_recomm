@@ -92,6 +92,7 @@ temp_server_config = {'client_id': 0,
                       'url': 'http://hcdm4.cs.virginia.edu:8989'}
 
 
+
 class Recommender:
     def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, 
     mode='default', test=False, time_config=None, schedule_evt_test_config=None):
@@ -366,6 +367,7 @@ class Recommender:
                 con = sqlite3.connect(
                     'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
                 cursorObj = con.cursor()
+
 
                 table_name = 'RESIDENTS_DATA'
                 # select the latest deploymnet by ordering table by created date
