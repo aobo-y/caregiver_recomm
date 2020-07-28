@@ -239,7 +239,7 @@ class Recommender:
         answer_bank = [1.0,0.0,-1.0]
         # ask if stress management tip was done (yes no) question
         postrecomm_answer = self.call_poll_ema(message,answer_bank, speaker_id)
-        print(f'postrecomm_answer {postrecomm_answer}')
+
         # if done (Yes)
         if postrecomm_answer == 1.0:
             reward = 1.0
@@ -287,10 +287,6 @@ class Recommender:
         qtype2 = ''
         req_id = None
         pre_ans = None
-
-        #for testing!:
-        #time.sleep(360)
-        #time.sleep(120)
 
         if self.mock:
             return 'mock_id'
@@ -352,6 +348,7 @@ class Recommender:
         '''
         global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT
 
+
         if not self.test_mode:
             self.timer.sleep(180)
 
@@ -405,12 +402,13 @@ class Recommender:
                 if con:
                     con.close()
 
-            # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
-            # #self.timer.sleep(10)
-            # morn_hour = 10
-            # morn_min = 20
-            # ev_hour = 23
-            # ev_min = 22
+
+        # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
+        # #self.timer.sleep(10)
+        # morn_hour = 13
+        # morn_min = 7
+        # ev_hour = 13
+        # ev_min = 14
 
         TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
         TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
@@ -431,7 +429,6 @@ class Recommender:
             else:
                 break
 
-        weekly_survey_count = 0
 
         while True:
             idx = evt_count % len(schedule_evts)
@@ -446,7 +443,6 @@ class Recommender:
             next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
 
             log(f'Sleep till next schedule event: {next_evt_time_str}', timer=self.timer)
-            print(next_evt_time - now)
             self.timer.sleep((next_evt_time - now).total_seconds())
 
             try:
@@ -465,7 +461,6 @@ class Recommender:
                     message = 'morning:positive:' + category + ':' + str(randnum2)
                     #textbox, thanks: 0.0, or no choice: -1.0
                     reflection_answer = self.call_poll_ema(message, all_answers=True)
-
 
 
                     #send the encouragement message ----------------------------
@@ -577,7 +572,6 @@ class Recommender:
                         message = 'evening:daily:goalno:1' # always send the same message
                         multiple_answer = self.call_poll_ema(message,all_answers=True) #multiple choice or skipped
 
-
                     #ask about recommendations questions---------------
                     recomm_answer = -1.0  # default for system helpful question
                     message = 'evening:stress:manag:1' #always send the same message
@@ -594,13 +588,11 @@ class Recommender:
                         message = 'evening:stress:managno:1' # always send the same message
                         mult_answer = self.call_poll_ema(message,all_answers=True) #multiple choice or skipped
 
-
                     #send the evening message system helpful questions (only if they did stress management)---------------
                     if recomm_answer == 1.0:
                         randnum2 = random.randint(1, 3)  # pick 1 of 3 questions
                         message = 'evening:system:helpful:' + str(randnum2)
                         helpful_answer = self.call_poll_ema(message,all_answers=True) #slide bar, 0, or -1.0
-
 
                 #Weekly Survey--------- if one week has passed! one week has passed
 
@@ -609,7 +601,6 @@ class Recommender:
 
                     message = 'weekly:survey:1' # always send the same survey
                     weekly_answer = self.call_poll_ema(message,all_answers=True) #any answer mult or skipped: -1.0
-
 
                     #Number of questions ------------
                     message = 'weekly:messages:1' # always send the same survey
@@ -629,9 +620,7 @@ class Recommender:
                         # if 2 they want less messages
                         elif number_ques == 2 and MAX_MESSAGES > max_messages_delta:  # cant have no messages send
                             MAX_MESSAGES -= max_messages_delta
-
                         #3, no change
-
 
                     #Time between questions ---------------
                     message = 'weekly:msgetime:1' # always send the same question
@@ -697,7 +686,7 @@ class Recommender:
                 log('Send scheduled action error:', error, timer=self.timer)
             finally:
                 #send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm='false', test=True)
+                _ = call_ema('1', '995', alarm='false', test=self.test_mode)
 
             evt_count += 1
             if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
@@ -712,7 +701,7 @@ class Recommender:
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
             req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
             answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, 
-            duration= (POLL_TIME if not self.test_mode else 0.1), freq=(5 if not self.test_mode else 0.02), test_mode=self.test_mode)
+            duration= (POLL_TIME if not self.test_mode else 0.1), freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
             #answer: None, if nothing is selected...reload
 
             #any answer other than None

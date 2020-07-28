@@ -16,7 +16,6 @@ import base64
 from .log import log
 
 DIR_PATH = os.path.dirname(__file__)
-# get a mysql db connection
 
 MESSAGE_SENT = ''
 CHOICES_SENT = ''
@@ -108,6 +107,7 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
                 if cursor_fetch == '((None,),)': #check if NULL value
                     answer = -1.0
                 else:
+                    #cursor_fetch is looks like: '((b'2',),)'
                     answer = cursor_fetch.split("'")[1]
                     #slide bar type
                     if question_type == 'slide bar':
@@ -187,7 +187,7 @@ def setup_message(message_name, type='binary', test=False):
         message_name = message_name.replace('[!]','')
 
     #open json with all prompts and their ids
-    with open("../json_prompts.json", 'r') as file:
+    with open("json_prompts.json", 'r') as file:
         json_prompts = json.load(file)
 
 
