@@ -42,7 +42,6 @@ def call_ema(id, suid='', message='', alarm='true', test=False):
 
     # items needed in url
     empathid = '999|' + str(int(time.time() * 100))
-
     phone_url = 'http://191.168.0.106:2226' if not test else 'http://127.0.0.1:5000'
     server_url = 'http://191.168.0.107/ema/ema.php'
     androidid = 'db7d3cdb88e1a62a'
@@ -187,8 +186,11 @@ def setup_message(message_name, type='binary', test=False):
         extra_morning_msg = True #to be used to change answer choices
         message_name = message_name.replace('[!]','')
 
+    #get json directory
+    json_path = DIR_PATH.replace('\\', '/').replace('pkg', 'json_prompts.json')
+
     #open json with all prompts and their ids
-    with open("json_prompts.json", 'r') as file:
+    with open(json_path, 'r') as file:
         json_prompts = json.load(file)
 
 
@@ -240,16 +242,20 @@ def setup_message(message_name, type='binary', test=False):
         randdist = random.randint(0, len(json_prompts['recomm:checkin:distract'])-1)
         message = message.replace('[distractions]',json_prompts['recomm:checkin:distract'][randdist])
 
-
     #-- ALL Messages Formatting --
     #changes the name in the message (must retrieve names from DeploymentInformation.db)
     caregiver_name = 'caregiver' #default
     care_recipient_name = 'care recipient' #default
     if not test:
         try:
+            # path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
+            depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg', 'DeploymentInformation.db')
+            # if file doesnt exist revert to testing path
+            depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
+                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
+
             con = None
-            con = sqlite3.connect(
-                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+            con = sqlite3.connect(depl_info_path)
             cursorObj = con.cursor()
 
 

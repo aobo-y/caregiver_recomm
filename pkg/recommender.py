@@ -7,6 +7,7 @@ import json
 import sqlite3
 import numpy as np
 import random
+import os
 
 from .alg import LinUCB
 from .scenario import Scenario
@@ -21,12 +22,13 @@ ACTIONS = ['timeout:1','timeout:2','timeout:3','timeout:4','timeout:5','timeout:
 POLL_TIME = 120
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
-COOLDOWN_TIME = 300 #5 min
+COOLDOWN_TIME = 1800 #30 min
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
 TIME_MORN_DELT = timedelta(hours=10, minutes=0)
 TIME_EV_DELT = timedelta(hours=23, minutes=0)
+DIR_PATH = os.path.dirname(__file__)
 
 class ServerModelAdaptor:
     def __init__(self, client_id=0, url='http://localhost:8000/'):
@@ -90,7 +92,6 @@ class RemoteLocalBlender:
 # temporarily hardcode server config for easier integrate for not
 temp_server_config = {'client_id': 0,
                       'url': 'http://hcdm4.cs.virginia.edu:8989'}
-
 
 
 class Recommender:
@@ -349,7 +350,6 @@ class Recommender:
         '''
         global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT
 
-
         if not self.test_mode:
             self.timer.sleep(180)
 
@@ -360,12 +360,17 @@ class Recommender:
         ev_min = 0
 
         # get start time from deployment
-
         if not self.test_mode:
             try:
+                #path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
+                depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg','DeploymentInformation.db')
+                #if file doesnt exist revert to testing path
+                depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
+                    'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
+
+                print(depl_info_path)
                 con = None
-                con = sqlite3.connect(
-                    'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+                con = sqlite3.connect(depl_info_path)
                 cursorObj = con.cursor()
 
 
@@ -407,8 +412,8 @@ class Recommender:
 
         # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
         # #self.timer.sleep(10)
-        # morn_hour = 13
-        # morn_min = 7
+        # morn_hour = 4
+        # morn_min = 25
         # ev_hour = 13
         # ev_min = 14
 
