@@ -368,7 +368,6 @@ class Recommender:
                 depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
                     'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
 
-                print(depl_info_path)
                 con = None
                 con = sqlite3.connect(depl_info_path)
                 cursorObj = con.cursor()
