@@ -1,0 +1,52 @@
+[
+  { "morning": { "intro": [1, 1] } },
+  {
+    "morning": {
+      "positive": {
+        "general": [1, 8],
+        "accomp": [1, 2],
+        "feeling": [1, 4],
+        "family": [1, 3],
+        "growth": [1, 4]
+      }
+    }
+  },
+  {
+    "morning": {
+      "encouragement": {
+        "general": [1, 8],
+        "success": [1, 2],
+        "unsuccess": [1, 2],
+        "unsuccessmult": [1, 2],
+        "successmult": [1, 1]
+      }
+    }
+  },
+  {
+    "morning": {
+      "encouragement": {
+        "general": [1, 8]
+      }
+    }
+  },
+  {
+    "morning": { "self_care_goal": [1, 3] }
+  },
+  { "evening": { "intro": [1, 1] } },
+  { "evening": { "likert": { "stress": [1, 1], "lonely": [1, 1], "health": [1, 2] } }},
+  { "evening": { "daily": { "goal": [1, 1] } } },
+  { "evening": { "daily": { "goalyes": [1, 1] } } },
+  { "evening": { "daily": { "goalno": [1, 1] } } },
+  { "evening": { "stress": { "manag": [1, 1] } } },
+  { "evening": { "stress": { "managyes": [1, 1] } } },
+  { "evening": { "stress": { "managno": [1, 1] } } },
+  { "evening": { "system": { "helpful": [1, 3] } } },
+  { "weekly": { "survey": [1, 1] } },
+  { "weekly": { "messages": [1, 1] } },
+  { "weekly": { "messages": { "no": [1, 1] } } },
+  { "weekly": { "msgetime": [1, 1] } },
+  { "weekly": { "msgetime": { "no": [1, 1] } } },
+  { "weekly": { "startstop": [1, 1] } },
+  { "weekly": { "startstop": { "start": [1, 1] } } },
+  { "weekly": { "startstop": { "stop": [1, 1] } } }
+]
