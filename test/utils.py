@@ -3,9 +3,6 @@ import re
 import pymysql
 from copy import deepcopy
 
-with open('msg_config.json') as msg_config_file:
-    msg_config = json.load(msg_config_file)
-
 with open('../json_prompts.json') as all_messages_file:
     all_messages = json.load(all_messages_file)
 
@@ -23,19 +20,13 @@ def get_message_name(q):
     name = query_db(f'select QuestionName from reward_data where empathid="{q["empathid"]}"', ret=True)
     return name[0][0]
 
-def verify_state(q, messages=None, n=None):
+def verify_state(q, messages):
     """
     verify the question sent from recommender with the expected message(s) or its index
     returns a tuple of the correctness of the state, the expected state and the actual state
     see README for the format of message(s)
     """
-    if messages == None and n == None:
-        raise Exception('must give at least one of message or index of message in msg_config')
-        return
-
-    # deepcopy to prevent change to original msg_config
-    if messages == None:
-        messages = deepcopy(msg_config[n])
+    messages = deepcopy(messages)
 
     message_name = query_db(f'select QuestionName from reward_data where empathid="{q["empathid"]}"', ret = True)
 

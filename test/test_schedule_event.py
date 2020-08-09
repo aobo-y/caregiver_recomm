@@ -22,6 +22,60 @@ day_repeat = 1
 
 app = Flask(__name__)
 
+
+m = [
+  { "morning": { "intro": [1, 1] } },
+  {
+    "morning": {
+      "positive": {
+        "general": [1, 8],
+        "accomp": [1, 2],
+        "feeling": [1, 4],
+        "family": [1, 3],
+        "growth": [1, 4]
+      }
+    }
+  },
+  {
+    "morning": {
+      "encouragement": {
+        "general": [1, 8],
+        "success": [1, 2],
+        "unsuccess": [1, 2],
+        "unsuccessmult": [1, 2],
+        "successmult": [1, 1]
+      }
+    }
+  },
+  {
+    "morning": {
+      "encouragement": {
+        "general": [1, 8]
+      }
+    }
+  },
+  {
+    "morning": { "self_care_goal": [1, 3] }
+  },
+  { "evening": { "intro": [1, 1] } },
+  { "evening": { "likert": { "stress": [1, 1], "lonely": [1, 1], "health": [1, 2] } }},
+  { "evening": { "daily": { "goal": [1, 1] } } },
+  { "evening": { "daily": { "goalyes": [1, 1] } } },
+  { "evening": { "daily": { "goalno": [1, 1] } } },
+  { "evening": { "stress": { "manag": [1, 1] } } },
+  { "evening": { "stress": { "managyes": [1, 1] } } },
+  { "evening": { "stress": { "managno": [1, 1] } } },
+  { "evening": { "system": { "helpful": [1, 3] } } },
+  { "weekly": { "survey": [1, 1] } },
+  { "weekly": { "messages": [1, 1] } },
+  { "weekly": { "messages": { "no": [1, 1] } } },
+  { "weekly": { "msgetime": [1, 1] } },
+  { "weekly": { "msgetime": { "no": [1, 1] } } },
+  { "weekly": { "startstop": [1, 1] } },
+  { "weekly": { "startstop": { "start": [1, 1] } } },
+  { "weekly": { "startstop": { "stop": [1, 1] } } }
+]
+
 def make_config(interv, day_repeat):
     c = ConfigMaker()
 
@@ -32,49 +86,49 @@ def make_config(interv, day_repeat):
     for i in range(day_repeat):
         # morning message
         for j in range(5): 
-            c.add_state(i * day + morning, interv, interv, j, [1], ["1", "2"])
+            c.add_state(i * day + morning, interv, interv, m[j], [1], ["1", "2"])
 
         eve_time = i * day + evening
         # evening message
         # intro
-        c.add_state(eve_time, interv, interv, 5, [1], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[5], [1], ["1", "2"])
         # likert
-        c.add_state(eve_time, interv, interv, 6, [1], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[6], [1], ["1", "2"])
         # daily goal
-        c.add_state(eve_time, interv, interv, 7, [1, 2], ["1", "2"])
-        c.add_state(eve_time, interv, interv, 8, [2], ["1", "2"])
-        c.add_state(eve_time, interv, interv, 9, [1], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[7], [1, 2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[8], [2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[9], [1], ["1", "2"])
 
         # ask about recommendation
         # stress_manag1
-        c.add_state(eve_time, interv, interv, 10, [1, 2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[10], [1, 2], ["1", "2"])
         # stress_managyes1
-        c.add_state(eve_time, interv, interv, 11, [2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[11], [2], ["1", "2"])
         # stress_managno1
-        c.add_state(eve_time, interv, interv, 12, [2], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[12], [2], ["1", "2"])
 
         # system_helpful
-        c.add_state(eve_time, interv, interv, 13, [1], ["1", "2"])
+        c.add_state(eve_time, interv, interv, m[13], [1], ["1", "2"])
     
     # weekly survey
-    c.add_state(eve_time, interv, interv, 14, [1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[14], [1], ["1", "2"])
 
     # weekly message 1
-    c.add_state(eve_time, interv, interv, 15, [2, 1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[15], [2, 1], ["1", "2"])
     # weekly message no
-    c.add_state(eve_time, interv, interv, 16, [1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[16], [1], ["1", "2"])
 
     # weekly msgetime
-    c.add_state(eve_time, interv, interv, 17, [2, 1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[17], [2, 1], ["1", "2"])
     # weekly msgetime no
-    c.add_state(eve_time, interv, interv, 18, [1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[18], [1], ["1", "2"])
 
     # weekly startstop 1
-    c.add_state(eve_time, interv, interv, 19, [None, 1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[19], [None, 1], ["1", "2"])
     # weekly startstop start 1
-    c.add_state(eve_time, interv, interv, 20, [1], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[20], [1], ["1", "2"])
     # weekly startstop stop 1
-    c.add_state(eve_time, interv, interv, 21, [], ["1", "2"])
+    c.add_state(eve_time, interv, interv, m[21], [], ["1", "2"])
 
     # for i in range(l):
     #     make_no_response_states(config[i])

@@ -17,7 +17,7 @@ class ConfigMaker:
         self._cur = 0
         self._config = []
     
-    def add_state(self, time, time_before, time_after, message, next_states_increment, choices):
+    def add_state(self, time, time_before, time_after, messages, next_states_increment, choices):
         """
         adds state to config; for convenience, it is recommended to put the default next-state at index 0
         """
@@ -30,13 +30,9 @@ class ConfigMaker:
                 next_states.append(self._cur + n)
             else:
                 next_states.append(None)
-    
-        if type(message) == int:
-            self._config.append([time, time_before, time_after, 
-                lambda x: verify_state(x, n=message), next_states, choices])
-        else:
-            self._config.append([time, time_before, time_after, 
-                lambda x: verify_state(x, messages=message), next_states, choices])
+
+        self._config.append([time, time_before, time_after, 
+            lambda x: verify_state(x, messages), next_states, choices])
 
         self._cur += 1
 
