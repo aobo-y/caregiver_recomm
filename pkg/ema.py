@@ -16,7 +16,6 @@ import base64
 from .log import log
 
 DIR_PATH = os.path.dirname(__file__)
-# get a mysql db connection
 
 MESSAGE_SENT = ''
 CHOICES_SENT = ''
@@ -43,10 +42,10 @@ def call_ema(id, suid='', message='', alarm='true', test=False):
 
     # items needed in url
     empathid = '999|' + str(int(time.time() * 100))
-
     phone_url = 'http://191.168.0.106:2226' if not test else 'http://127.0.0.1:5000'
     server_url = 'http://191.168.0.107/ema/ema.php'
     androidid = 'db7d3cdb88e1a62a'
+
     alarm = alarm
 
     # sending action to phone
@@ -69,7 +68,7 @@ def call_ema(id, suid='', message='', alarm='true', test=False):
             db = get_conn()
             cursor = db.cursor()
 
-            insert_query = "INSERT INTO reward_data(empathid,TimeSent,RecommSent,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded) \
+            insert_query = "INSERT INTO reward_data(empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded) \
                                   VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s','%s')" % \
                 (empathid, time_sent, suid, 'NA', -1.0,MESSAGE_SENT,qtype,MESSAGE_NAME,0)
             cursor.execute(insert_query)
@@ -108,6 +107,7 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
                 if cursor_fetch == '((None,),)': #check if NULL value
                     answer = -1.0
                 else:
+                    #cursor_fetch is looks like: '((b'2',),)'
                     answer = cursor_fetch.split("'")[1]
                     #slide bar type
                     if question_type == 'slide bar':
@@ -186,8 +186,11 @@ def setup_message(message_name, type='binary', test=False):
         extra_morning_msg = True #to be used to change answer choices
         message_name = message_name.replace('[!]','')
 
+    #get json directory
+    json_path = DIR_PATH.replace('\\', '/').replace('pkg', 'json_prompts.json')
+
     #open json with all prompts and their ids
-    with open("../json_prompts.json", 'r') as file:
+    with open(json_path, 'r') as file:
         json_prompts = json.load(file)
 
 
@@ -239,17 +242,22 @@ def setup_message(message_name, type='binary', test=False):
         randdist = random.randint(0, len(json_prompts['recomm:checkin:distract'])-1)
         message = message.replace('[distractions]',json_prompts['recomm:checkin:distract'][randdist])
 
-
     #-- ALL Messages Formatting --
     #changes the name in the message (must retrieve names from DeploymentInformation.db)
     caregiver_name = 'caregiver' #default
     care_recipient_name = 'care recipient' #default
     if not test:
         try:
+            # path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
+            depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg', 'DeploymentInformation.db')
+            # if file doesnt exist revert to testing path
+            depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
+                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
+
             con = None
-            con = sqlite3.connect(
-                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db')
+            con = sqlite3.connect(depl_info_path)
             cursorObj = con.cursor()
+
 
             table_name = 'RESIDENTS_DATA'
 
