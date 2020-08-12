@@ -155,7 +155,7 @@ class Recommender:
         try:
             if self.mode == 'mood_checking':
                 self.last_action_time = self.timer.now()
-                # dynamic message for moode checking
+                # dynamic message for mood checking
                 empathid, retrieval_object, qtype = call_ema(speaker_id, '995')
                 if not empathid:
                     log('no empathid, mood checking survey not send')
@@ -211,7 +211,7 @@ class Recommender:
                     'action_ucbs': ucbs
                 })
 
-                log('reward retrieved', reward)
+                log('reward retrieved', reward, timer=self.timer)
                 self.model.update(ctx, action_idx, reward)
 
                 # update stats
@@ -249,6 +249,7 @@ class Recommender:
             helpful_yes = self.call_poll_ema(message,speaker_id=speaker_id,all_answers=True) #return all answers
 
             if helpful_yes and helpful_yes != -1.0:  # dont want to add None to list
+                reward = -1 + 0.2 * helpful_yes
                 # store the category of recommendation and how helpful it was
                 if CURRENT_RECOMM_CATEGORY in DAILY_RECOMM_DICT.keys():  # if category exists add to list
                     DAILY_RECOMM_DICT[CURRENT_RECOMM_CATEGORY].append(helpful_yes)
@@ -420,9 +421,11 @@ class Recommender:
         TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
 
 
-        schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
+        schedule_evts = [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
         weekly_day = 'Monday'
 
+        if self.test_mode:
+            weekly_day = (datetime.now() + timedelta(days=self.test_day_repeat - 1)).today().strftime('%A')
 
         start_today = self.timer.now().replace(hour=0, minute=0, second=0, microsecond=0)
         evt_count = 0
@@ -602,7 +605,7 @@ class Recommender:
 
                 #Weekly Survey--------- if one week has passed! one week has passed
 
-                if datetime.today().strftime('%A') == weekly_day:
+                if (self.test_mode and evt_count % len(schedule_evts) >= self.test_day_repeat) or (not self.test_mode and datetime.today().strftime('%A') == weekly_day):
                     #weekly survey question ---------
 
                     message = 'weekly:survey:1' # always send the same survey

@@ -24,7 +24,6 @@ MESSAGE_NAME = ''
 def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
 
-
 def call_ema(id, suid='', message='', alarm='true', test=False):
     global MESSAGE_SENT
     global CHOICES_SENT
@@ -84,6 +83,34 @@ def call_ema(id, suid='', message='', alarm='true', test=False):
         pass
     return empathid, retrieval_object, qtype
 
+def convert_answer(answer, question_type):
+        if question_type == 'slide bar':
+            #return the number from 0-10 that was chosen
+            return float(answer)
+        #multiple choice type 1-2-3-4...
+        if question_type == 'multiple choice':
+            #return the number that was chosen
+            temp = answer.split('-')#list of answer choice in list for reward data table
+            temp.sort() #looks better
+            return str(([int(x) for x in temp])) #make every element an int but return lst as string
+        #message received (okay) button
+        if question_type == 'message received':
+            #always send recommendation if you press okay
+            if answer: #if there is an end time
+                return 0.0
+        #radio button choice 1 or 2 or 3...
+        if question_type == 'radio':
+            return int(answer)
+        if question_type == 'textbox':
+            return answer #keep what was entered in textbox
+        #yes no and it helps buttons (send more)
+        if question_type == 'thanks':
+            return 0.0
+        if answer == '1': #if they answer yes '1'
+            return 1.0
+        # if answer is no '2' send recommendation, always send recommendation after textbox
+        if answer=='2' or question_type=='thanks':
+            return 0.0
 
 def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, freq=5, test_mode=False):
     answer = None #reload question case

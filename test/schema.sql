@@ -67,10 +67,23 @@ CREATE TABLE IF NOT EXISTS `reward_data` (
   `Question` varchar(500) DEFAULT NULL,
   `QuestionType` varchar(200) DEFAULT NULL,
   `QuestionName` varchar(500) DEFAULT NULL,
+  `suid` varchar(10) DEFAULT NULL,
   `Uploaded` int(20) NOT NULL,
   PRIMARY KEY (`empathid`),
   UNIQUE KEY `empathid_UNIQUE` (`empathid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CREATE TABLE IF NOT EXISTS `ema_storing_data` (
+  `time` datetime(6) NOT NULL,
+  `event_vct` varchar(5000) DEFAULT NULL,
+  `stats_vct` varchar(5000) DEFAULT NULL,
+  `action` int(10) DEFAULT NULL,
+  `reward` float(10, 5) DEFAULT NULL,
+  `action_vct` varchar(5000) DEFAULT NULL,
+  `uploaded` int(1) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`time`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
