@@ -316,7 +316,6 @@ def setup_message(message_name, type='binary', test=False):
         finally:
             db.close()
 
-
     #if there is a next line in message
     if '\n' in message:
         message = message.replace('\n',php_newline)

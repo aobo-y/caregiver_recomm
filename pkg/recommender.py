@@ -26,8 +26,10 @@ COOLDOWN_TIME = 1800 #30 min
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
-TIME_MORN_DELT = timedelta(hours=10, minutes=0)
-TIME_EV_DELT = timedelta(hours=23, minutes=0)
+TIME_MORN_DELT = timedelta(hours=10, minutes=1)
+TIME_EV_DELT = timedelta(hours=22, minutes=30)
+INITIALIZED_SCHED_EVT = False
+IN_PROGRESS_EVT = False
 DIR_PATH = os.path.dirname(__file__)
 
 class ServerModelAdaptor:
@@ -145,6 +147,19 @@ class Recommender:
         if not isinstance(evt, np.ndarray):
             evt = np.array(evt)
 
+        #safety in case of numpy array or float
+        speaker_id = int(speaker_id)
+
+        #system must be initialized (no cooldown)
+        if not INITIALIZED_SCHED_EVT:
+            log('Scheduled events not yet initialized')
+            return
+
+        #do not interuprt scheduled events messages (no cooldown)
+        if IN_PROGRESS_EVT:
+            log('Scheduled events messages are in progress')
+            return
+
         thread = Thread(target=self._process_evt, args=(speaker_id, evt))
         thread.daemon = True
         thread.start()
@@ -175,7 +190,7 @@ class Recommender:
                 log('model gives action', action_idx)
                 self.last_action_time = self.timer.now()
 
-                #daily limit
+                #daily limit (cool down)
                 if MESSAGES_SENT_TODAY>=MAX_MESSAGES:
                     log('Max amount of messages sent today')
                     return
@@ -183,7 +198,7 @@ class Recommender:
                 #for testing
                 #time.sleep(360)
 
-                #send only during acceptable time
+                #send only during acceptable time (cool down)
                 current_time = timedelta(hours = self.timer.now().hour, minutes= self.timer.now().minute)
                 if  (current_time < TIME_MORN_DELT or current_time > TIME_EV_DELT):
                     log('Current time outside acceptable time interval')
@@ -348,76 +363,18 @@ class Recommender:
         '''
         Send the morning message at 10 am
         '''
-        global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT
+
+        global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT, INITIALIZED_SCHED_EVT, IN_PROGRESS_EVT
 
         if not self.test_mode:
-            self.timer.sleep(180)
+           self.timer.sleep(180)
 
-        # Default message time
-        morn_hour = 10
-        morn_min = 0
-        ev_hour = 23
-        ev_min = 0
 
-        # get start time from deployment
+        # Default message time set as global variables
+
+        # get start time from Informationdeployment.db
         if not self.test_mode:
-            try:
-                #path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
-                depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg','DeploymentInformation.db')
-                #if file doesnt exist revert to testing path
-                depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
-                    'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
-
-                con = None
-                con = sqlite3.connect(depl_info_path)
-                cursorObj = con.cursor()
-
-
-                table_name = 'RESIDENTS_DATA'
-                # select the latest deploymnet by ordering table by created date
-                #must select the second row with 1, 1 because there is both caregivee and caregiver, (time goes in caregiver)
-                cursorObj.execute("SELECT * FROM " + table_name +
-                                " ORDER BY CREATED_DATE DESC LIMIT 1, 1")
-
-
-                # extract start time and end time
-                start_row, end_row = cursorObj.fetchall()[0][11:13]
-                start_hour, start_minute = [int(t) for t in start_row.split(':')]
-                end_hour, end_minute = [int(t) for t in end_row.split(':')]
-
-
-                # For demonstration purposes, morning message sent 1 minute after start, evening message sent 30 minutes before end time
-                # this will be modified later
-                # the following is just for demo purposes:
-                if start_minute == 59:
-                    morn_hour = start_hour + 1
-                    morn_min = 0
-                else:
-                    morn_hour = start_hour
-                    morn_min = start_minute + 1
-                if end_minute >= 30:
-                    ev_hour = end_hour
-                    ev_min = end_minute - 30
-                else:
-                    ev_hour = end_hour - 1
-                    ev_min = 30 + end_minute
-
-            except Exception as e:
-                log('Read SQLite DB error:', e, timer=self.timer)
-            finally:
-                if con:
-                    con.close()
-
-
-        # # # # #for testing purposes, remove later (to test evening messages, morning time must be set early)
-        # #self.timer.sleep(10)
-        # morn_hour = 4
-        # morn_min = 25
-        # ev_hour = 13
-        # ev_min = 14
-
-        TIME_MORN_DELT = timedelta(hours=morn_hour, minutes=morn_min)
-        TIME_EV_DELT = timedelta(hours=ev_hour, minutes=ev_min)
+            self.extract_time()
 
 
         schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
@@ -428,13 +385,14 @@ class Recommender:
         evt_count = 0
 
         # check where you are relative the interval of time
-
         for delta, _ in schedule_evts:
             if start_today + delta < self.timer.now():
                 evt_count += 1
             else:
                 break
 
+        INITIALIZED_SCHED_EVT = True
+        log('Scheduled Events Initialized')
 
         while True:
             idx = evt_count % len(schedule_evts)
@@ -448,8 +406,13 @@ class Recommender:
                 next_evt_time += timedelta(days=1)
             next_evt_time_str = next_evt_time.strftime('%Y-%m-%d %H:%M:%S')
 
+
+
             log(f'Sleep till next schedule event: {next_evt_time_str}', timer=self.timer)
             self.timer.sleep((next_evt_time - now).total_seconds())
+
+            #dont get interrrupted by recommendation
+            IN_PROGRESS_EVT = True
 
             try:
                 # Sending morning messages logic
@@ -694,6 +657,9 @@ class Recommender:
                 #send the blank message after everything for both morning and evening messages-------------
                 _ = call_ema('1', '995', alarm='false', test=self.test_mode)
 
+                #recommendations can now be sent
+                IN_PROGRESS_EVT = False
+
             evt_count += 1
             if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
                 return
@@ -733,3 +699,49 @@ class Recommender:
             return None, req_id
 
         return None
+
+    def extract_time(self):
+        global TIME_MORN_DELT, TIME_EV_DELT
+
+        #default just in case
+        moring_time = TIME_MORN_DELT
+        evening_time = TIME_EV_DELT
+
+        try:
+            # path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
+            depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg', 'DeploymentInformation.db')
+            # if file doesnt exist revert to testing path
+            depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
+                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
+
+            con = None
+            con = sqlite3.connect(depl_info_path)
+            cursorObj = con.cursor()
+
+            table_name = 'RESIDENTS_DATA'
+            # select the latest deploymnet by ordering table by created date
+            # must select the second row with 1, 1 because there is both caregivee and caregiver, (time goes in caregiver)
+            cursorObj.execute("SELECT * FROM " + table_name +
+                              " ORDER BY CREATED_DATE DESC LIMIT 1, 1")
+
+            # extract start time and end time
+            start_row, end_row = cursorObj.fetchall()[0][11:13]
+            start_hour, start_minute = [int(t) for t in start_row.split(':')]
+            end_hour, end_minute = [int(t) for t in end_row.split(':')]
+
+            #morning message sent 1 minute after start, evening message sent 30 minutes before end time
+            moring_time = timedelta(hours=start_hour, minutes=start_minute) + timedelta(minutes=1)
+            evening_time = timedelta(hours=end_hour, minutes=end_minute) + timedelta(minutes=-30)
+
+            #avoids setting time if error in line above
+            TIME_MORN_DELT = moring_time
+            TIME_EV_DELT = evening_time
+            log('InformationDeployment.db time read successfully')
+
+        except Exception as e:
+            log('Read SQLite DB error:', e, timer=self.timer)
+        finally:
+            if con:
+                con.close()
+
+        return
