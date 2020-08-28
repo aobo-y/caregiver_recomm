@@ -22,14 +22,10 @@ ACTIONS = ['timeout:1','timeout:2','timeout:3','timeout:4','timeout:5','timeout:
 POLL_TIME = 120
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
-COOLDOWN_TIME = 1800 #30 min
+COOLDOWN_TIME = 2400 #40 min
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
-TIME_MORN_DELT = timedelta(hours=10, minutes=1)
-TIME_EV_DELT = timedelta(hours=22, minutes=30)
-INITIALIZED_SCHED_EVT = False
-IN_PROGRESS_EVT = False
 DIR_PATH = os.path.dirname(__file__)
 
 class ServerModelAdaptor:
@@ -128,6 +124,19 @@ class Recommender:
 
         self.last_action_time = self.timer.now().replace(year=2000)
 
+        self.recomm_start = False
+        self.sched_initialized = False
+        self.stop_questions = False
+
+        #Default start and end time
+        self.time_morn_delt = timedelta(hours=10, minutes=1)
+        self.time_ev_delt = timedelta(hours=22, minutes=30)
+
+        # get start time from Informationdeployment.db
+        if not self.test_mode:
+            self.timer.sleep(180) #wait for db to update
+            self.extract_time()
+
         # initialize _schedule_evt()
         if (not test) or (schedule_evt_test_config != None):
             schedule_thread = Thread(target=self._schedule_evt)
@@ -148,16 +157,17 @@ class Recommender:
             evt = np.array(evt)
 
         #safety in case of numpy array or float
-        speaker_id = int(speaker_id)
+        if type(speaker_id) is not int:
+            raise TypeError('Speaker id must be integer, received: ' + speaker_id)
 
-        #system must be initialized (no cooldown)
-        if not INITIALIZED_SCHED_EVT:
+        # system must be initialized
+        if not self.sched_initialized:
             log('Scheduled events not yet initialized')
             return
 
-        #do not interuprt scheduled events messages (no cooldown)
-        if IN_PROGRESS_EVT:
-            log('Scheduled events messages are in progress')
+        #acoustic events only sent during time interval or not during current scheduled events
+        if not self.recomm_start:
+            log('Current time outside acceptable time interval or scheduled events in progress')
             return
 
         thread = Thread(target=self._process_evt, args=(speaker_id, evt))
@@ -198,16 +208,11 @@ class Recommender:
                 #for testing
                 #time.sleep(360)
 
-                #send only during acceptable time (cool down)
-                current_time = timedelta(hours = self.timer.now().hour, minutes= self.timer.now().minute)
-                if  (current_time < TIME_MORN_DELT or current_time > TIME_EV_DELT):
-                    log('Current time outside acceptable time interval')
-                    return # (not self.test_mode) and
-
                 empathid = self._send_action(speaker_id, action_idx)
 
                 if not empathid:
                     log('no empathid, action not send')
+                    self.stop_questions = False  # reset
                     return
 
                 log('action sent #id', empathid)
@@ -216,6 +221,7 @@ class Recommender:
                 reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
                 if reward is None:
                     log('retrieve no reward for #id:', empathid)
+                    self.stop_questions = False  # reset
                     return
 
                 self.record_data({
@@ -234,6 +240,8 @@ class Recommender:
 
         except Exception as err:
             log('Event processing error:', err)
+        finally:
+            self.stop_questions = False #reset
 
     def get_reward(self, empathid, ctx, action_idx, speaker_id):
         global DAILY_RECOMM_DICT, CURRENT_RECOMM_CATEGORY, EXTRA_ENCRGMNT
@@ -242,8 +250,9 @@ class Recommender:
 
         reward = None
 
-        # send the blank message after recommendation
-        _ = call_ema('1', '995', alarm='false', test=self.test_mode)
+        if self.recomm_start:
+            # send the blank message after recommendation
+            _ = call_ema('1', '995', alarm='false', test=self.test_mode)
 
         if 'enjoyable' in CURRENT_RECOMM_CATEGORY:
             self.timer.sleep(3600) #wait for 60 min if recommendation is enjoyable activity
@@ -255,15 +264,15 @@ class Recommender:
         message = 'daytime:postrecomm:implement:1'
         answer_bank = [1.0,0.0,-1.0]
         # ask if stress management tip was done (yes no) question
-        postrecomm_answer = self.call_poll_ema(message,answer_bank, speaker_id)
+        postrecomm_answer = self.call_poll_ema(message,answer_bank, speaker_id, acoust_evt=True)
 
         # if done (Yes)
         if postrecomm_answer == 1.0:
             reward = 1.0
             message = 'daytime:postrecomm:helpfulyes:1'
-            helpful_yes = self.call_poll_ema(message,speaker_id=speaker_id,all_answers=True) #return all answers
+            helpful_yes = self.call_poll_ema(message,speaker_id=speaker_id,all_answers=True, acoust_evt=True) #return all answers
 
-            if helpful_yes and helpful_yes != -1.0:  # dont want to add None to list
+            if helpful_yes and (helpful_yes != -1.0):  # dont want to add None to list
                 # store the category of recommendation and how helpful it was
                 if CURRENT_RECOMM_CATEGORY in DAILY_RECOMM_DICT.keys():  # if category exists add to list
                     DAILY_RECOMM_DICT[CURRENT_RECOMM_CATEGORY].append(helpful_yes)
@@ -276,7 +285,7 @@ class Recommender:
             message = 'daytime:postrecomm:helpfulno:1'
 
             # if helpful_no: #multiple choice 1 2 or 3
-            helpful_no = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True)  # return all answers
+            helpful_no = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True, acoust_evt=True)  # return all answers
 
 
         #check if they want more morning encourement msg
@@ -284,11 +293,13 @@ class Recommender:
             #send extra encrgment msg from morning message
             message = EXTRA_ENCRGMNT
             #ask until skipped: -1.0, 3 reloads: None, or an answer
-            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True)
+            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True, acoust_evt=True)
             EXTRA_ENCRGMNT = ''
 
-        # send the blank message
-        _ = call_ema('1', '995', alarm='false', test=self.test_mode)
+        #recomm start could be changed any second by the scheduled events
+        if self.recomm_start:
+            # send the blank message
+            _ = call_ema('1', '995', alarm='false', test=self.test_mode) #even if stop questions
 
         return reward
 
@@ -308,15 +319,16 @@ class Recommender:
         if self.mock:
             return 'mock_id'
 
+
         # Send check in question (prequestion) pick random question
         randnum1 = random.randint(1, 5)
         message = 'daytime:check_in:'+str(randnum1)
         # send recommendation if they answer thanks! or dont select choice
         answer_bank = [0.0,-1.0]
 
-        # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id)
 
+        # send the question 3 times (if no response) for x duration based on survey id
+        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True)
 
         #always send the recommendation
         #pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
@@ -326,7 +338,12 @@ class Recommender:
         CURRENT_RECOMM_CATEGORY = r_cat.replace(':','')
         msg = 'daytime:recomm:' + recomm_id
         answer_bank = [0.0] #message received 0.0
-        answer, req_id = self.call_poll_ema(msg,answer_bank, speaker_id, empath_return=True)#return empath id
+        answer, req_id = self.call_poll_ema(msg,answer_bank, speaker_id, empath_return=True, acoust_evt=True)#return empath id
+
+        #in case of None empath id
+        if (not req_id) and self.recomm_start:
+            # send directly even if stop questions is true, because get_reward wont be called
+            _ = call_ema('1', '995', alarm='false', test=self.test_mode)
 
         # return the empath id
         return req_id
@@ -364,20 +381,10 @@ class Recommender:
         Send the morning message at 10 am
         '''
 
-        global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT, TIME_MORN_DELT, TIME_EV_DELT, INITIALIZED_SCHED_EVT, IN_PROGRESS_EVT
-
-        if not self.test_mode:
-           self.timer.sleep(180)
+        global MAX_MESSAGES, MESSAGES_SENT_TODAY, COOLDOWN_TIME, DAILY_RECOMM_DICT, EXTRA_ENCRGMNT
 
 
-        # Default message time set as global variables
-
-        # get start time from Informationdeployment.db
-        if not self.test_mode:
-            self.extract_time()
-
-
-        schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(TIME_MORN_DELT, 'morning message'), (TIME_EV_DELT, 'evening message')]  # (hour, event_id)
+        schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [(self.time_morn_delt, 'morning message'), (self.time_ev_delt, 'evening message')]  # (hour, event_id)
         weekly_day = 'Monday'
 
 
@@ -391,7 +398,8 @@ class Recommender:
             else:
                 break
 
-        INITIALIZED_SCHED_EVT = True
+        #scheduled events initialized
+        self.sched_initialized = True
         log('Scheduled Events Initialized')
 
         while True:
@@ -410,9 +418,6 @@ class Recommender:
 
             log(f'Sleep till next schedule event: {next_evt_time_str}', timer=self.timer)
             self.timer.sleep((next_evt_time - now).total_seconds())
-
-            #dont get interrrupted by recommendation
-            IN_PROGRESS_EVT = True
 
             try:
                 # Sending morning messages logic
@@ -509,6 +514,7 @@ class Recommender:
 
                 # Sending evening messages logic
                 if event_id == 'evening message':
+                    self.recomm_start = False  # recomm should not be sent anymore
                     MESSAGES_SENT_TODAY = 0 #reset messages to 0
 
                     #send evening intro message -------
@@ -624,7 +630,7 @@ class Recommender:
 
 
                         # each answer choice represents a different change to start time (1-9)
-                        if start_time and start_time != -1.0:
+                        if start_time and (start_time != -1.0):
                             # already 1 min after start time
                             hour_change = change_by_hour[int(start_time) - 1]
                             min_change = change_by_min[int(start_time) - 1]
@@ -639,7 +645,7 @@ class Recommender:
                         message = 'weekly:startstop:stop:1'
                         stop_time = self.call_poll_ema(message,all_answers=True) #multiple choice
 
-                        if stop_time and stop_time != -1.0:  # answer 1-9 (matches the list above)
+                        if stop_time and (stop_time != -1.0):  # answer 1-9 (matches the list above)
                             # already 30 min before end time
                             hour_change = change_by_hour[int(stop_time) - 1]
                             min_change = change_by_min[int(stop_time) - 1]
@@ -649,42 +655,62 @@ class Recommender:
                             # reset scheduled events
                             schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
 
+
+                #send the blank message after everything for both morning and evening messages-------------
+                _ = call_ema('1', '995', alarm='false', test=self.test_mode) #send directly even if stop questions
+
+
                 log(f'Scheduled event sent: {event_id}', timer=self.timer)
 
             except Exception as error:
                 log('Send scheduled action error:', error, timer=self.timer)
             finally:
-                #send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm='false', test=self.test_mode)
+                self.stop_questions = False #reset
 
-                #recommendations can now be sent
-                IN_PROGRESS_EVT = False
+                if event_id == 'morning message':
+                    self.recomm_start = True #recomm can now be sent
+                elif event_id == 'evening message':
+                    self.recomm_start = False #backup incase error
 
             evt_count += 1
             if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
                 return
 
-    def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3):
+    def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3, acoust_evt=False):
+
+        #do not send questions if previous question unanswered
+        if (self.stop_questions == True) and (empath_return == True):
+            return None, None
+        elif self.stop_questions == True:
+            return None
+
         req_id = None
         send_count = 0
+        refresh_poll_time = POLL_TIME
         #send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
+
+            # dont continue acoust if scheduled evt
+            if acoust_evt and (not self.recomm_start) and empath_return:
+                return None, None
+            elif acoust_evt and (not self.recomm_start):
+                return None
 
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
             req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
             answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, 
-            duration= (POLL_TIME if not self.test_mode else 0.1), freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
+            duration= (refresh_poll_time if not self.test_mode else 0.1), freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
             #answer: None, if nothing is selected...reload
 
             #any answer other than None
-            if answer != None and all_answers == True:
+            if (answer != None) and (all_answers == True):
                 # -1.0 if question skipped
                 return answer
 
             #checks for specific answers
             for a_value in msg_answers:
                 #send recomm case, need empath_id
-                if empath_return == True and answer == a_value:
+                if (empath_return == True) and (answer == a_value):
                     #return answer and empath id
                     return answer, req_id
                 #regular case
@@ -693,19 +719,23 @@ class Recommender:
 
             #no choice selected ask again
             send_count += 1
+            if send_count == 1:
+                refresh_poll_time = 300 #5min
+            elif send_count == 2:
+                refresh_poll_time = 600 #10min
 
         #send recomm case need empath even if no answer
         if empath_return == True:
             return None, req_id
 
+        #no answer given after x attempts
+        self.stop_questions = True #stop this series of questions
         return None
 
     def extract_time(self):
-        global TIME_MORN_DELT, TIME_EV_DELT
-
         #default just in case
-        moring_time = TIME_MORN_DELT
-        evening_time = TIME_EV_DELT
+        moring_time = self.time_morn_delt
+        evening_time = self.time_ev_delt
 
         try:
             # path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
@@ -734,8 +764,16 @@ class Recommender:
             evening_time = timedelta(hours=end_hour, minutes=end_minute) + timedelta(minutes=-30)
 
             #avoids setting time if error in line above
-            TIME_MORN_DELT = moring_time
-            TIME_EV_DELT = evening_time
+            self.time_morn_delt = moring_time
+            self.time_ev_delt = evening_time
+
+            current_time = timedelta(hours=self.timer.now().hour, minutes=self.timer.now().minute)
+            if (current_time > self.time_morn_delt) and (current_time < self.time_ev_delt):
+                self.recomm_start = True #system initialized during acceptable interval
+            else:
+                self.recomm_start = False #if new time entered in future
+
+
             log('InformationDeployment.db time read successfully')
 
         except Exception as e:
