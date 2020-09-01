@@ -13,7 +13,7 @@ from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
 from .log import log
-from .ema import call_ema, poll_ema, get_conn
+from .ema import call_ema, poll_ema, get_conn, setup_message
 from .time import Time
 
 ACTIONS = ['timeout:1','timeout:2','timeout:3','timeout:4','timeout:5','timeout:6','timeout:7','timeout:8','timeout:9',
@@ -93,14 +93,14 @@ temp_server_config = {'client_id': 0,
 
 
 class Recommender:
-    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, 
+    def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config,
     mode='default', test=False, time_config=None, schedule_evt_test_config=None):
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
 
         self.test_mode = test
         if time_config != None:
-            self.timer = Time(time_config['scale'], 
+            self.timer = Time(time_config['scale'],
             time_config['fake_start'],
             time_config['start_hr'], 0, 0)
         else:
@@ -128,14 +128,17 @@ class Recommender:
         self.sched_initialized = False
         self.stop_questions = False
 
+        self.caregiver_name = 'caregiver'  # default
+        self.care_recipient_name = 'care recipient'  # default
+
         #Default start and end time
         self.time_morn_delt = timedelta(hours=10, minutes=1)
         self.time_ev_delt = timedelta(hours=22, minutes=30)
 
-        # get start time from Informationdeployment.db
+        #get start time from Informationdeployment.db
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
-            self.extract_time()
+            self.extract_deploy_info()
 
         # initialize _schedule_evt()
         if (not test) or (schedule_evt_test_config != None):
@@ -480,8 +483,6 @@ class Recommender:
                         recomm_category = extreme_unsuccess[0] #take first category found
                         encourage_category = 'unsuccess'
 
-                    #reset
-                    DAILY_RECOMM_DICT = {}
                     #choose category of encouragement messages to send
                     encourage_dict = {'general': 8, 'success': 2, 'unsuccess': 2, 'unsuccessmult': 2,'successmult':1}
                     randnum3 = random.randint(1, encourage_dict[encourage_category])
@@ -569,9 +570,8 @@ class Recommender:
                         message = 'evening:system:helpful:' + str(randnum2)
                         helpful_answer = self.call_poll_ema(message,all_answers=True) #slide bar, 0, or -1.0
 
-                #Weekly Survey--------- if one week has passed! one week has passed
-
-                if datetime.today().strftime('%A') == weekly_day:
+                #Weekly Survey--------- if one monday and after evening messages
+                if (datetime.today().strftime('%A') == weekly_day) and (event_id == 'evening message'):
                     #weekly survey question ---------
 
                     message = 'weekly:survey:1' # always send the same survey
@@ -669,6 +669,7 @@ class Recommender:
 
                 if event_id == 'morning message':
                     self.recomm_start = True #recomm can now be sent
+                    DAILY_RECOMM_DICT = {}  # reset
                 elif event_id == 'evening message':
                     self.recomm_start = False #backup incase error
 
@@ -684,6 +685,10 @@ class Recommender:
         elif self.stop_questions == True:
             return None
 
+        #setup question only once, send the same question all three times
+        suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name = setup_message(msg, test=self.test_mode, caregiver_name=self.caregiver_name, care_recipient_name=self.care_recipient_name)
+        setup_lst = [suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name]
+
         req_id = None
         send_count = 0
         refresh_poll_time = POLL_TIME
@@ -697,8 +702,8 @@ class Recommender:
                 return None
 
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
-            req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
-            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, 
+            req_id, retrieval_object, qtype = call_ema(speaker_id, test=self.test_mode, already_setup=setup_lst)
+            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype,
             duration= (refresh_poll_time if not self.test_mode else 0.1), freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
             #answer: None, if nothing is selected...reload
 
@@ -732,7 +737,7 @@ class Recommender:
         self.stop_questions = True #stop this series of questions
         return None
 
-    def extract_time(self):
+    def extract_deploy_info(self):
         #default just in case
         moring_time = self.time_morn_delt
         evening_time = self.time_ev_delt
@@ -773,6 +778,18 @@ class Recommender:
             else:
                 self.recomm_start = False #if new time entered in future
 
+            # Names: must select first and second row by using 0,2
+            cursorObj.execute("SELECT * FROM " + table_name +
+                            " ORDER BY CREATED_DATE DESC LIMIT 0,2")
+            names = cursorObj.fetchall()
+            recip_name = names[0][9]
+            giver_name = names[1][9]
+
+            #avoid no names ''
+            if recip_name:
+                self.care_recipient_name = recip_name
+            if giver_name:
+                self. caregiver_name = giver_name
 
             log('InformationDeployment.db time read successfully')
 

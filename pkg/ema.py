@@ -17,24 +17,30 @@ from .log import log
 
 DIR_PATH = os.path.dirname(__file__)
 
-MESSAGE_SENT = ''
-CHOICES_SENT = ''
-MESSAGE_NAME = ''
+
 
 def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
 
 
-def call_ema(id, suid='', message='', alarm='true', test=False):
-    global MESSAGE_SENT
-    global CHOICES_SENT
-    global MESSAGE_NAME
+def call_ema(id, suid='', message='', alarm='true', test=False, already_setup=[]):
+
+    #default
+    message_sent = ''
+    choices_sent = ''
+    message_name = ''
+
+
     empathid = None
     retrieval_object = ''
     qtype = ''
 
-    if message:
-        suid, retrieval_object, qtype = setup_message(message, test=test)
+    if already_setup:
+        suid, retrieval_object, qtype, message_sent, message_name = already_setup
+    #not using this anymore
+    elif message:
+        suid, retrieval_object, qtype, message_sent, message_name = setup_message(message, test=test)
+
     # time sending the prequestion
     start_time = time.time()
     # date and time format of the time the prequestion is sent
@@ -70,7 +76,7 @@ def call_ema(id, suid='', message='', alarm='true', test=False):
 
             insert_query = "INSERT INTO reward_data(empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded) \
                                   VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s','%s')" % \
-                (empathid, time_sent, suid, 'NA', -1.0,MESSAGE_SENT,qtype,MESSAGE_NAME,0)
+                (empathid, time_sent, suid, 'NA', -1.0,message_sent,qtype,message_name,0)
             cursor.execute(insert_query)
             db.commit()
         except Exception as err:
@@ -163,14 +169,12 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
     return answer
 
 
-def setup_message(message_name, type='binary', test=False):
-    global MESSAGE_SENT, CHOICES_SENT, MESSAGE_NAME
-
+def setup_message(message_name, test=False, caregiver_name='caregiver', care_recipient_name='care recipient'):
     #default
     extra_morning_msg = False
 
     #html code
-    php_newline = '<br />'
+    html_newline = '<br />'
     bld = '<strong>'
     end_bld = '</strong>'
     cntr = '<center>'
@@ -229,13 +233,13 @@ def setup_message(message_name, type='binary', test=False):
     for r_type in recomm_types_dict.keys():
         if r_type in message_name:
             # must use <br /> instead of \n (php)
-            type_title ='Stress Management Tip: ' + bld + recomm_types_dict[r_type] + end_bld + php_newline*2
+            type_title ='Stress Management Tip: ' + bld + recomm_types_dict[r_type] + end_bld + html_newline*2
             #add recommendation type
             message = type_title + message
             #read url and style for image from json file
             image_url,image_style = json_prompts['recomm_images'][r_type] #191.168.0.107
             #add image to message
-            message = message + php_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
+            message = message + html_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
 
     #check in messages
     if '[distractions]' in message:
@@ -244,35 +248,6 @@ def setup_message(message_name, type='binary', test=False):
 
     #-- ALL Messages Formatting --
     #changes the name in the message (must retrieve names from DeploymentInformation.db)
-    caregiver_name = 'caregiver' #default
-    care_recipient_name = 'care recipient' #default
-    if not test:
-        try:
-            # path for DeploymentInformation.db assume recomm system WITHIN acoustic folder
-            depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg', 'DeploymentInformation.db')
-            # if file doesnt exist revert to testing path
-            depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
-                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
-
-            con = None
-            con = sqlite3.connect(depl_info_path)
-            cursorObj = con.cursor()
-
-
-            table_name = 'RESIDENTS_DATA'
-
-            # must select first and second row by using 0,2
-            cursorObj.execute("SELECT * FROM " + table_name +
-                            " ORDER BY CREATED_DATE DESC LIMIT 0,2")
-            names = cursorObj.fetchall()
-            care_recipient_name = names[0][9]
-            caregiver_name = names[1][9]
-
-        except Exception as e:
-            log('Read SQLite DB error:', e)
-        finally:
-            if con:
-                con.close()
     #if the message uses a name, replace default with actual name from database
     if '[caregiver name]' in message:
         message = message.replace('[caregiver name]',caregiver_name)
@@ -286,7 +261,7 @@ def setup_message(message_name, type='binary', test=False):
         #normal multiple choice or radio button questions
         if '[]' in message:
             answer_choices = message.split('[]')[1]
-            CHOICES_SENT = answer_choices #for reward_data
+            choices_sent = answer_choices #for reward_data
             message = message.split('[]')[0]
 
             # only for multiple choice questions add 'check...
@@ -318,12 +293,12 @@ def setup_message(message_name, type='binary', test=False):
 
     #if there is a next line in message
     if '\n' in message:
-        message = message.replace('\n',php_newline)
+        message = message.replace('\n',html_newline)
 
     #for STORING in reward data
-    MESSAGE_SENT = message.replace(php_newline,'').replace(bld,'').replace(end_bld,' ') #we dont want <br /> or bold
-    MESSAGE_SENT = pymysql.escape_string(MESSAGE_SENT) #must use escape for the \' in message
-    MESSAGE_NAME = message_name
+    stored_message_sent = message.replace(html_newline,'').replace(bld,'').replace(end_bld,' ') #we dont want <br /> or bold
+    stored_message_sent = pymysql.escape_string(stored_message_sent) #must use escape for the \' in message
+    stored_message_name = message_name
 
     #converting prompt to binary
     binary_prompt = message.encode('ascii')
@@ -343,4 +318,4 @@ def setup_message(message_name, type='binary', test=False):
     finally:
         db.close()
     # returns suid, retrieval code, and question type
-    return suid, retrieval_code, qtype
+    return suid, retrieval_code, qtype, stored_message_sent, stored_message_name
