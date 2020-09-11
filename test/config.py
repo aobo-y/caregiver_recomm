@@ -19,7 +19,13 @@ class ConfigMaker:
     
     def add_state(self, time, time_before, time_after, messages, next_states_increment, choices):
         """
-        adds state to config; for convenience, it is recommended to put the default next-state at index 0
+        adds state to config; for convenience, it is recommended to put the default next-state at index 0.
+        :param time: desired time to receive this message, from the time that this route starts; the unit is second.
+        :param time_before: it is tolerable to receive the message from (time - time_before) to (time + time_after)
+        :param time_after: see above
+        :param messages: messages that can receive in this state
+        :param next_states_increment: the difference between indices of the next states and this state
+        :param choices: choices for the caregiver, must be aligned with next_states_increment
         """
         if len(choices) < len(next_states_increment):
             raise Exception('Config: # of choice should be greater than or equal to # of next states.')

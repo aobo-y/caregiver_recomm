@@ -229,7 +229,7 @@ tester = Tester(config, time_between_routes=8)
 
 recommender = Recommender(test=True, 
     time_config={'scale': 4680, 'fake_start': True, 'start_hr': 9},
-    schedule_evt_test_config={'day_repeat': day_repeat, 'week_repeat': len(tester.routes)})
+    schedule_evt_config={'day_repeat': day_repeat, 'week_repeat': len(tester.routes)})
 
 logger = logging.getLogger('werkzeug')
 logger.setLevel(logging.ERROR)

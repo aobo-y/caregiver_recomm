@@ -130,38 +130,17 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
             data = cursor.execute(query)
 
             if data:
-                cursor_fetch = str(cursor.fetchall())
-                if cursor_fetch == '((None,),)': #check if NULL value
+                cursor_fetch = cursor.fetchall()[0][0]
+                if cursor_fetch == None: #check if NULL value
                     answer = -1.0
                 else:
                     #cursor_fetch is looks like: '((b'2',),)'
-                    answer = cursor_fetch.split("'")[1]
-                    #slide bar type
-                    if question_type == 'slide bar':
-                        #return the number from 0-10 that was chosen
-                        answer = float(answer)
-                    #multiple choice type 1-2-3-4...
-                    if question_type == 'multiple choice':
-                        #return the number that was chosen
-                        answer = answer.split('-')#list of answer choice in list for reward data table
-                        answer.sort() #looks better
-                        answer = str(([int(x) for x in answer])) #make every element an int but return lst as string
-                    #message received (okay) button
-                    if question_type == 'message received':
-                        #always send recommendation if you press okay
-                        if answer: #if there is an end time
-                            answer = 0.0
-                    #radio button choice 1 or 2 or 3...
-                    if question_type == 'radio':
-                        answer = int(answer)
-                    if question_type == 'textbox':
-                        answer = answer #keep what was entered in textbox
-                    #yes no and it helps buttons (send more)
-                    if answer == '1': #if they answer yes '1'
-                        answer = 1.0
-                    # if answer is no '2' send recommendation, always send recommendation after textbox
-                    if answer=='2' or question_type=='thanks':
-                        answer = 0.0
+                    # answer = cursor_fetch.split("'")[1]
+                    if type(answer) == bytes:
+                        answer = cursor_fetch.decode('utf-8')
+                    else:
+                        answer = cursor_fetch
+                    answer = convert_answer(answer, question_type)
 
                 # time prequestion is received
                 end_time = time.time()

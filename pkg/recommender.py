@@ -96,7 +96,7 @@ temp_server_config = {'client_id': 0,
 
 class Recommender:
     def __init__(self, evt_dim=5, mock=False, server_config=temp_server_config, 
-    mode='default', test=False, time_config=None, schedule_evt_test_config=None):
+    mode='default', test=False, time_config=None, schedule_evt_config=None):
         ctx_size = evt_dim + len(ACTIONS)
         self.action_cooldown = timedelta(seconds=COOLDOWN_TIME)
 
@@ -108,9 +108,9 @@ class Recommender:
         else:
             self.timer = Time(1)
 
-        if test and schedule_evt_test_config != None:
-            self.test_day_repeat = schedule_evt_test_config['day_repeat']
-            self.test_week_repeat = schedule_evt_test_config['week_repeat']
+        if test and schedule_evt_config != None:
+            self.test_day_repeat = schedule_evt_config['day_repeat']
+            self.test_week_repeat = schedule_evt_config['week_repeat']
 
         self.model = LinUCB(ctx_size, len(ACTIONS), alpha=3.)
         if server_config:
@@ -126,12 +126,13 @@ class Recommender:
 
         self.last_action_time = self.timer.now().replace(year=2000)
 
-        # initialize _schedule_evt()
-        if (not test) or (schedule_evt_test_config != None):
+        # if want to send the scheduled event
+        if (not test) or (schedule_evt_config != None):
             schedule_thread = Thread(target=self._schedule_evt)
             schedule_thread.daemon = True
             schedule_thread.start()
             self.schedule_thread = schedule_thread
+
 
     def cooldown_ready(self):
         return self.timer.now() - self.last_action_time > self.action_cooldown
@@ -221,6 +222,10 @@ class Recommender:
             log('Event processing error:', err)
 
     def get_reward(self, empathid, ctx, action_idx, speaker_id):
+        """
+        send followup questions to the action
+        :return rewards calculated from the answers to the followup questions
+        """
         global DAILY_RECOMM_DICT, CURRENT_RECOMM_CATEGORY, EXTRA_ENCRGMNT
         if self.mock:
             return self.mock_scenario.insight(0, ctx, action_idx)[0]
@@ -240,15 +245,16 @@ class Recommender:
         message = 'daytime:postrecomm:implement:1'
         answer_bank = [1.0,0.0,-1.0]
         # ask if stress management tip was done (yes no) question
-        postrecomm_answer = self.call_poll_ema(message,answer_bank, speaker_id)
+        postrecomm_answer, _ = self.call_poll_ema(message, valid_answer=answer_bank, speaker_id=speaker_id)
 
         # if done (Yes)
         if postrecomm_answer == 1.0:
-            reward = 1.0
+            reward = 0
             message = 'daytime:postrecomm:helpfulyes:1'
-            helpful_yes = self.call_poll_ema(message,speaker_id=speaker_id,all_answers=True) #return all answers
+            helpful_yes, _ = self.call_poll_ema(message, valid_answer=[i for i in range(1, 10)], 
+                                speaker_id=speaker_id)
 
-            if helpful_yes and helpful_yes != -1.0:  # dont want to add None to list
+            if helpful_yes and helpful_yes != -1.0:
                 reward = -1 + 0.2 * helpful_yes
                 # store the category of recommendation and how helpful it was
                 if CURRENT_RECOMM_CATEGORY in DAILY_RECOMM_DICT.keys():  # if category exists add to list
@@ -262,7 +268,7 @@ class Recommender:
             message = 'daytime:postrecomm:helpfulno:1'
 
             # if helpful_no: #multiple choice 1 2 or 3
-            helpful_no = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True)  # return all answers
+            helpful_no, _ = self.call_poll_ema(message, speaker_id=speaker_id, accept_any_answer=True)  # return all answers
 
 
         #check if they want more morning encourement msg
@@ -270,7 +276,7 @@ class Recommender:
             #send extra encrgment msg from morning message
             message = EXTRA_ENCRGMNT
             #ask until skipped: -1.0, 3 reloads: None, or an answer
-            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True)
+            thanks_answer, _ = self.call_poll_ema(message, speaker_id=speaker_id, accept_any_answer=True)
             EXTRA_ENCRGMNT = ''
 
         # send the blank message
@@ -301,7 +307,7 @@ class Recommender:
         answer_bank = [0.0,-1.0]
 
         # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id)
+        _ = self.call_poll_ema(message, valid_answer=answer_bank, speaker_id=speaker_id)
 
 
         #always send the recommendation
@@ -312,7 +318,7 @@ class Recommender:
         CURRENT_RECOMM_CATEGORY = r_cat.replace(':','')
         msg = 'daytime:recomm:' + recomm_id
         answer_bank = [0.0] #message received 0.0
-        answer, req_id = self.call_poll_ema(msg,answer_bank, speaker_id, empath_return=True)#return empath id
+        answer, req_id = self.call_poll_ema(msg, valid_answer=answer_bank, speaker_id=speaker_id)#return empath id
 
         # return the empath id
         return req_id
@@ -459,7 +465,7 @@ class Recommender:
                 if event_id == 'morning message':
                     #Send the intro morning message
                     message = 'morning:intro:1'
-                    intro_answer = self.call_poll_ema(message, all_answers=True) #0.0 or -1.0
+                    intro_answer, _ = self.call_poll_ema(message, accept_any_answer=True) #0.0 or -1.0
                     #send the morning message and positive aspects message---------------
                     send_count = 0
                     #pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -469,7 +475,7 @@ class Recommender:
                     # send 3 times (each question will wait 120 seconds (2 min))
                     message = 'morning:positive:' + category + ':' + str(randnum2)
                     #textbox, thanks: 0.0, or no choice: -1.0
-                    reflection_answer = self.call_poll_ema(message, all_answers=True)
+                    reflection_answer, _ = self.call_poll_ema(message, accept_any_answer=True)
 
 
                     #send the encouragement message ----------------------------
@@ -522,7 +528,7 @@ class Recommender:
                     randnum3 = random.randint(1, encourage_dict[encourage_category])
                     message = 'morning:encouragement:' + encourage_category + ':' + str(randnum3) + '<>' + recomm_category
                     answer_bank = [1, 2, 3, -1.0]
-                    enc_answer = self.call_poll_ema(message,answer_bank)
+                    enc_answer, _ = self.call_poll_ema(message,answer_bank)
 
                     # always sending a general question (make sure not to send the same question as before
                     randnum4 = random.choice([i for i in range(1, encourage_dict['general'] + 1) if i not in [randnum3]])
@@ -531,7 +537,7 @@ class Recommender:
 
                     # if they answer send more encouraging messages (send general encouragement)
                     if enc_answer == 1:
-                        extra_msg_answer = self.call_poll_ema(extra_msg_name,all_answers=True)#all answers thanks or skip -1.0
+                        extra_msg_answer, _ = self.call_poll_ema(extra_msg_name, accept_any_answer=True)#all answers thanks or skip -1.0
 
                     # if they answer send more later today
                     elif enc_answer == 2:
@@ -544,7 +550,7 @@ class Recommender:
                     randnum5 = random.randint(1, 3)
                     message = 'morning:self_care_goal' + ':' + str(randnum5)
                     answer_bank = [0.0,-1.0] #okay or skip
-                    self_care_answer = self.call_poll_ema(message, answer_bank)
+                    self_care_answer, _ = self.call_poll_ema(message, accept_any_answer=True)
 
 
                 # Sending evening messages logic
@@ -553,7 +559,7 @@ class Recommender:
 
                     #send evening intro message -------
                     message = 'evening:intro:1'
-                    evening_introanswer = self.call_poll_ema(message,all_answers=True) #0.0 msg rec or -1.0 skipped
+                    evening_introanswer, _ = self.call_poll_ema(message, accept_any_answer=True) #0.0 msg rec or -1.0 skipped
 
 
                     #send the evening message likert scale----------------------
@@ -562,46 +568,46 @@ class Recommender:
                     category = random.choice(list(likert_categ.keys()))
                     randnum1 = random.randint(1, likert_categ[category])
                     message = 'evening:likert:' + category + ':' + str(randnum1)
-                    likert_answer = self.call_poll_ema(message,all_answers=True) #0 -1.0 or any number on scale
+                    likert_answer, _ = self.call_poll_ema(message,  accept_any_answer=True) #0 -1.0 or any number on scale
 
 
                     #send the evening message daily goal follow-up ---------------
                     message = 'evening:daily:goal:1' #always send the same message
                     answer_bank = [1.0, 0.0,-1.0] #yes, no, skipped
-                    goal_answer = self.call_poll_ema(message,answer_bank)
+                    goal_answer, _ = self.call_poll_ema(message, valid_answer=answer_bank)
 
                     # if yes
                     if goal_answer == 1.0:
                         # send the good job! message
                         message = 'evening:daily:goalyes:1' #always send the same message
-                        thanks_answer = self.call_poll_ema(message, all_answers=True) #thanks 0.0, skipped -1.0
+                        thanks_answer, _ = self.call_poll_ema(message,  accept_any_answer=True) #thanks 0.0, skipped -1.0
                     # if no
                     elif goal_answer == 0.0:
                         # send the multiple choice question asking why
                         message = 'evening:daily:goalno:1' # always send the same message
-                        multiple_answer = self.call_poll_ema(message,all_answers=True) #multiple choice or skipped
+                        multiple_answer, _ = self.call_poll_ema(message, accept_any_answer=True) #multiple choice or skipped
 
                     #ask about recommendations questions---------------
                     recomm_answer = -1.0  # default for system helpful question
                     message = 'evening:stress:manag:1' #always send the same message
                     answer_bank = [1.0,0.0,-1.0] #yes, no, skipped
-                    recomm_answer = self.call_poll_ema(message,answer_bank)
+                    recomm_answer, _ = self.call_poll_ema(message,answer_bank)
                     # if yes
                     if recomm_answer == 1.0:
                         message = 'evening:stress:managyes:1' # always send the same message
-                        stress1_answer = self.call_poll_ema(message, all_answers=True)
+                        stress1_answer, _ = self.call_poll_ema(message,  accept_any_answer=True)
 
                     # if no
                     elif recomm_answer == 0.0:
                         # send the multiple choice question asking why
                         message = 'evening:stress:managno:1' # always send the same message
-                        mult_answer = self.call_poll_ema(message,all_answers=True) #multiple choice or skipped
+                        mult_answer, _ = self.call_poll_ema(message, accept_any_answer=True) #multiple choice or skipped
 
                     #send the evening message system helpful questions (only if they did stress management)---------------
                     if recomm_answer == 1.0:
                         randnum2 = random.randint(1, 3)  # pick 1 of 3 questions
                         message = 'evening:system:helpful:' + str(randnum2)
-                        helpful_answer = self.call_poll_ema(message,all_answers=True) #slide bar, 0, or -1.0
+                        helpful_answer, _ = self.call_poll_ema(message, accept_any_answer=True) #slide bar, 0, or -1.0
 
                 #Weekly Survey--------- if one week has passed! one week has passed
 
@@ -609,17 +615,17 @@ class Recommender:
                     #weekly survey question ---------
 
                     message = 'weekly:survey:1' # always send the same survey
-                    weekly_answer = self.call_poll_ema(message,all_answers=True) #any answer mult or skipped: -1.0
+                    weekly_answer, _ = self.call_poll_ema(message, accept_any_answer=True) #any answer mult or skipped: -1.0
 
                     #Number of questions ------------
                     message = 'weekly:messages:1' # always send the same survey
                     answer_bank = [1.0,0.0,-1.0] #yes, no, skipped
-                    good_ques = self.call_poll_ema(message,answer_bank)
+                    good_ques, _ = self.call_poll_ema(message,answer_bank)
 
                     #if no: 0.0 (not okay with the number of questions), if yes (1.0) no change
                     if good_ques == 0.0:
                         message = 'weekly:messages:no:1' # always send the same survey
-                        number_ques = self.call_poll_ema(message, all_answers=True) #multiple choice
+                        number_ques, _ = self.call_poll_ema(message,  accept_any_answer=True) #multiple choice
 
                         max_messages_delta = 1  # change by one message
                         # if 1 they want more messages
@@ -634,11 +640,11 @@ class Recommender:
                     #Time between questions ---------------
                     message = 'weekly:msgetime:1' # always send the same question
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    good_time = self.call_poll_ema(message,answer_bank)#multiple choice
+                    good_time, _ = self.call_poll_ema(message,answer_bank)#multiple choice
                     # if no: 0.0(they want more time between questions), if yes 1.0, no change
                     if good_time == 0:
                         message = 'weekly:msgetime:no:1'  # always send the same survey
-                        number_ques = self.call_poll_ema(message,all_answers=True) #multiple choice
+                        number_ques, _ = self.call_poll_ema(message, accept_any_answer=True) #multiple choice
 
                         cooldown_delta = 300  # change by 5 min
                         # if 1 they want more time between messages
@@ -655,12 +661,12 @@ class Recommender:
                     change_by_min = [0, -30, 0, -30, 0, 30, 0, 30, 0]
                     message = 'weekly:startstop:1'  # always send the same survey
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    good_startstop = self.call_poll_ema(message,answer_bank)
+                    good_startstop, _ = self.call_poll_ema(message,answer_bank)
 
                     # if no (they want different start stop time)
                     if good_startstop == 0.0:
                         message = 'weekly:startstop:start:1' # always send the same survey
-                        start_time = self.call_poll_ema(message,all_answers=True)
+                        start_time, _ = self.call_poll_ema(message, accept_any_answer=True)
 
 
                         # each answer choice represents a different change to start time (1-9)
@@ -677,7 +683,7 @@ class Recommender:
 
                         # send question about evening end time change
                         message = 'weekly:startstop:stop:1'
-                        stop_time = self.call_poll_ema(message,all_answers=True) #multiple choice
+                        stop_time, _ = self.call_poll_ema(message, accept_any_answer=True) #multiple choice
 
                         if stop_time and stop_time != -1.0:  # answer 1-9 (matches the list above)
                             # already 30 min before end time
@@ -701,11 +707,10 @@ class Recommender:
             if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
                 return
 
-    def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3):
+    def call_poll_ema_prev(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3):
         req_id = None
-        send_count = 0
         #send message 'remind_amt' times if there is no answer
-        while send_count < remind_amt:
+        for i in range(remind_amt):
 
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
             req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
@@ -719,20 +724,40 @@ class Recommender:
                 return answer
 
             #checks for specific answers
-            for a_value in msg_answers:
+            if answer in msg_answers:
                 #send recomm case, need empath_id
-                if empath_return == True and answer == a_value:
+                if empath_return == True:
                     #return answer and empath id
                     return answer, req_id
                 #regular case
-                elif answer == a_value:
+                else:
                     return answer
-
-            #no choice selected ask again
-            send_count += 1
 
         #send recomm case need empath even if no answer
         if empath_return == True:
             return None, req_id
 
         return None
+
+    def call_poll_ema(self, msg, accept_any_answer=False, valid_answer=[], speaker_id='1', remind_amt=3):
+        """
+        :param accept_any_answer:   set to true if any answer can be accepted, e.g. text answers. 
+        :param valid_answers:       check the validity of answers, can't be empty if accept_any_answer is set to false. 
+        :return (answer, empathid)
+        """
+        req_id = None
+        #send message 'remind_amt' times if there is no answer
+        for i in range(remind_amt):
+
+            # returns empathid, the polling object (for different types of questions from ema_data), and question type
+            req_id, retrieval_object, qtype = call_ema(speaker_id, message=msg, test=self.test_mode)
+            answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype, 
+            duration= (POLL_TIME if not self.test_mode else 0.1), freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
+            #answer: None, if nothing is selected...reload
+
+            #any answer other than None
+            if (answer != None and accept_any_answer) or answer in valid_answer:
+                # -1.0 if question skipped
+                return answer, req_id
+
+        return None, req_id
