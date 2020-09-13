@@ -23,7 +23,7 @@ def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
 
 
-def call_ema(id, suid='', message='', alarm='true', test=False, already_setup=[]):
+def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[]):
 
     #default
     message_sent = ''

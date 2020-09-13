@@ -362,7 +362,7 @@ class Recommender:
         answer_bank = [0.0, -1.0]
 
         # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True)
+        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm='true')
 
         # always send the recommendation
         # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
@@ -460,7 +460,7 @@ class Recommender:
                 if event_id == 'morning message':
                     # Send the intro morning message
                     message = 'morning:intro:1'
-                    intro_answer = self.call_poll_ema(message, all_answers=True)  # 0.0 or -1.0
+                    intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 or -1.0
                     # send the morning message and positive aspects message---------------
                     send_count = 0
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -555,7 +555,7 @@ class Recommender:
 
                     # send evening intro message -------
                     message = 'evening:intro:1'
-                    evening_introanswer = self.call_poll_ema(message, all_answers=True)  # 0.0 msg rec or -1.0 skipped
+                    evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 msg rec or -1.0 skipped
 
                     # send the evening message likert scale----------------------
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -713,7 +713,7 @@ class Recommender:
                 return
 
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3,
-                      acoust_evt=False):
+                      acoust_evt=False, phonealarm='false'):
 
         # do not send questions if previous question unanswered
         if (self.stop_questions == True) and (empath_return == True):
@@ -744,7 +744,7 @@ class Recommender:
 
             try:
                 # returns empathid, the polling object (for different types of questions from ema_data), and question type
-                req_id, retrieval_object, qtype = call_ema(speaker_id, test=self.test_mode, already_setup=setup_lst)
+                req_id, retrieval_object, qtype = call_ema(speaker_id, test=self.test_mode, already_setup=setup_lst, alarm=phonealarm)
                 answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype,
                                   duration=(refresh_poll_time if not self.test_mode else 0.1),
                                   freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
@@ -776,6 +776,7 @@ class Recommender:
 
             # no choice selected ask again
             send_count += 1
+            phonealarm = 'true' #when retry
             if send_count == 1:
                 refresh_poll_time = 300  # 5min
             elif send_count == 2:
