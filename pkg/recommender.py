@@ -132,6 +132,7 @@ class Recommender:
 
         self.recomm_start = False  # based on scheduled evts
         self.recomm_in_progress = False  # true when recomm currently in progress
+        self.sched_in_progress = False # true when schedule events currently in progress
         self.sched_initialized = False
         self.stop_questions = False  # after 3 retries
 
@@ -153,14 +154,21 @@ class Recommender:
         # get start time from Informationdeployment.db
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
-            self.extract_deploy_info()
+            self.extract_deploy_info()     
 
         if (not test) or (schedule_evt_test_config != None):
-            # initialize _schedule_evt()
+            # initialize _schedule_evt() thread
             schedule_thread = Thread(target=self._schedule_evt)
             schedule_thread.daemon = True
             schedule_thread.start()
             self.schedule_thread = schedule_thread
+
+            #initialize wakeup_evts() thread
+            wakeup_thread = Thread(target=self.wakeup_evt)
+            wakeup_thread.daemon = True
+            wakeup_thread.start()
+            self.wakeup_thread = wakeup_thread
+
 
     def cooldown_ready(self):
         return self.timer.now() - self.last_action_time > self.action_cooldown
@@ -455,12 +463,15 @@ class Recommender:
             log(f'Sleep till next schedule event: {next_evt_time_str}', timer=self.timer)
             self.timer.sleep((next_evt_time - now).total_seconds())
 
+            self.sched_in_progress = True #scheduled events are not in progress after sleeping
+
             try:
                 # Sending morning messages logic
                 if event_id == 'morning message':
                     # Send the intro morning message
                     message = 'morning:intro:1'
                     intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 or -1.0
+                    
                     # send the morning message and positive aspects message---------------
                     send_count = 0
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -556,7 +567,7 @@ class Recommender:
                     # send evening intro message -------
                     message = 'evening:intro:1'
                     evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 msg rec or -1.0 skipped
-
+                    
                     # send the evening message likert scale----------------------
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
                     likert_categ = {'stress': 1, 'lonely': 1, 'health': 2}
@@ -665,14 +676,12 @@ class Recommender:
                             # already 1 min after start time
                             hour_change = change_by_hour[int(start_time) - 1]
                             min_change = change_by_min[int(start_time) - 1]
-
                             # add to existing time form scheduled events
                             morning_timedelta = schedule_evts[0][0] + timedelta(hours=hour_change,
                                                                                 minutes=min_change)  # gives you new hour:min
-                            #only update if before 00:00
-                            if (morning_timedelta > timedelta(hours=0,minutes=0)):
-                                # reset scheduled events
-                                schedule_evts[0] = (morning_timedelta, 'morning message')  # since tuples immutable
+
+                            # reset scheduled events
+                            schedule_evts[0] = (morning_timedelta, 'morning message')  # since tuples immutable
 
                         # send question about evening end time change
                         message = 'weekly:startstop:stop:1'
@@ -685,10 +694,8 @@ class Recommender:
                             # add to existing time form scheduled events
                             evening_timedelta = schedule_evts[1][0] + timedelta(hours=hour_change, minutes=min_change)
 
-                            #only update if before 23:59
-                            if (evening_timedelta < timedelta(hours=23,minutes=59)):
-                                # reset scheduled events
-                                schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
+                            # reset scheduled events
+                            schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
 
                 # send the blank message after everything for both morning and evening messages-------------
                 _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
@@ -703,6 +710,7 @@ class Recommender:
                                   urgent=False)
             finally:
                 self.stop_questions = False  # reset
+                self.sched_in_progress = False # scheduled events are done
 
                 if event_id == 'morning message':
                     self.recomm_start = True  # recomm can now be sent
@@ -724,6 +732,7 @@ class Recommender:
             return None, None
         elif self.stop_questions == True:
             return None
+
 
         # setup question only once, send the same question all three times
         suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name = setup_message(msg, test=self.test_mode,
@@ -761,9 +770,6 @@ class Recommender:
                     time.sleep(600) #10 min
                     pass
                 else:
-                    self.email_alerts('call_ema or poll_ema error', str(err),'Failure in call_ema or poll_ema functions',
-                                      'Connection Error, WinError failed attempt to make a connection with the phone after 2 attempts',
-                                      urgent=False)
                     raise
             # answer: None, if nothing is selected...reload
             # any answer other than None
@@ -918,4 +924,23 @@ class Recommender:
         except Exception as e:
             log('Email Alert error:', e)
 
+        return
+    
+    def wakeup_evt(self):
+        #send a wake up empty message every 6 hours if nothing in progress (even during night)
+        while True:
+            time.sleep(21600) #6 hours
+            try: 
+                #only send if not during recomm messages or not during scheduled events
+                if (not self.recomm_in_progress) and (not self.sched_in_progress):
+                    #send empty message to phone
+                     _ = call_ema('1', '995', alarm='false', test=self.test_mode) 
+                     log('Wake up message sent. Sleep for: 6 hours', timer=self.timer)
+                else:
+                    log('Phone is busy, no need for a wake up message. Sleep for: 6 hours', timer=self.timer)
+            except Exception as e:
+                log('Wake up message error', e, timer=self.timer)
+                self.email_alerts('wakeupevts', str(e),'Wake up message error',
+                              'Wake up message is sent every 6 hours. An error has occurred', urgent=False)
+            
         return

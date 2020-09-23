@@ -197,7 +197,6 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
     with open(json_path, 'r') as file:
         json_prompts = json.load(file)
 
-
     #pick the prompt for tthe custom message
     suid, vsid, message, retrieval_code, qtype = json_prompts[message_name].values()
 
