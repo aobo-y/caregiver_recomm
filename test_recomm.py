@@ -11,11 +11,11 @@ def main(server_config=None, mock=False, mode='default'):
     recommender = Recommender(
         mock=mock, server_config=server_config, mode=mode)
 
-    while True:
-
-        evt = np.random.randn(D_EVT)
-        recommender.dispatch(1, evt)
-        time.sleep(5)
+    # while True:
+    #
+    #     evt = np.random.randn(D_EVT)
+    #     recommender.dispatch(1, evt)
+    #     time.sleep(5)
 
 
 if __name__ == "__main__":

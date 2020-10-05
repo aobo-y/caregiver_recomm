@@ -27,7 +27,7 @@ POLL_TIME = 120
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
 COOLDOWN_TIME = 2400 #40 min
-
+BASELINE_TIME = 604800 #1 week
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
@@ -128,12 +128,16 @@ class Recommender:
         if self.mock:
             self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
+        #Time defaults, cooldown and baseline
         self.last_action_time = self.timer.now().replace(year=2000)
+        self.baseline_start = self.timer.now()
+        self.baseline_period = timedelta(seconds=BASELINE_TIME)
 
+        #control threads
         self.recomm_start = False  # based on scheduled evts
         self.recomm_in_progress = False  # true when recomm currently in progress
         self.sched_initialized = False
-        self.stop_questions = False  # after 3 retries
+        self.stop_questions = False  # after 3 retries, dont send the rest of the series
 
         # email alerts defaults
         self.email_sched_count = 1
@@ -142,9 +146,13 @@ class Recommender:
         self.email_sched_message = ''
         self.email_sched_explanation = ''
 
+        #DeploymentInformation.db default info
         self.caregiver_name = 'caregiver'  # default
         self.care_recipient_name = 'care recipient'  # default
         self.home_id = ''  # default
+
+        #random generations
+        self.randgeneration = True
 
         # Default start and end time
         self.time_morn_delt = timedelta(hours=10, minutes=1)
@@ -162,8 +170,20 @@ class Recommender:
             schedule_thread.start()
             self.schedule_thread = schedule_thread
 
+        #random generation of recommendations
+        if self.randgeneration:
+            randrecomm_thread = Thread(target=self.randrecomm_testing())
+            randrecomm_thread.daemon = True
+            randrecomm_thread.start()
+            self.randrecomm_thread = randrecomm_thread
+
     def cooldown_ready(self):
+        #true when cooldown for recommendation message is over
         return self.timer.now() - self.last_action_time > self.action_cooldown
+
+    def fulldeployment_ready(self):
+        #true when 1 month baseline over
+        return self.timer.now() - self.baseline_start > self.baseline_period
 
     def dispatch(self, speaker_id, evt):
         log('recommender receives event:', str(evt))
@@ -191,10 +211,23 @@ class Recommender:
             log('Current time outside acceptable time interval or scheduled events in progress')
             return
 
+        # daily limit (cool down)
+        if MESSAGES_SENT_TODAY >= MAX_MESSAGES:
+            log('Max amount of messages sent today')
+            return
+
         # do not create a new recomm thread if one is already in progress
         if self.recomm_in_progress:
             log('recommendation event in progress')
             return
+
+        #BASELINE: if during baseline period, dont send recommendations, use dummy function
+        if not self.fulldeployment_ready():
+            log('Currently in baseline deployment, sending baseline recommendation messages')
+            #send the baseline deployment messages
+            self.baseline_recomm(speaker_id)
+            return
+
 
         thread = Thread(target=self._process_evt, args=(speaker_id, evt))
         thread.daemon = True
@@ -225,14 +258,6 @@ class Recommender:
 
                 log('model gives action', action_idx)
                 self.last_action_time = self.timer.now()
-
-                # daily limit (cool down)
-                if MESSAGES_SENT_TODAY >= MAX_MESSAGES:
-                    log('Max amount of messages sent today')
-                    return
-
-                # for testing
-                # time.sleep(360)
 
                 # recomm now in progress
                 self.recomm_in_progress = True
@@ -424,6 +449,7 @@ class Recommender:
 
         schedule_evts = [(timedelta(0, 5), '999'), (timedelta(0, 5), '998')] if self.test_mode else [
             (self.time_morn_delt, 'morning message'), (self.time_ev_delt, 'evening message')]  # (hour, event_id)
+
         weekly_day = 'Monday'
 
         start_today = self.timer.now().replace(hour=0, minute=0, second=0, microsecond=0)
@@ -455,9 +481,15 @@ class Recommender:
             log(f'Sleep till next schedule event: {next_evt_time_str}', timer=self.timer)
             self.timer.sleep((next_evt_time - now).total_seconds())
 
+
             try:
+                #check if still in baseline deployment
+                if not self.fulldeployment_ready():
+                    #send the unique baseline scheduled events and not the regular scheduled events
+                    self.baseline_schedule_evt(event_id)
+
                 # Sending morning messages logic
-                if event_id == 'morning message':
+                elif event_id == 'morning message':
                     # Send the intro morning message
                     message = 'morning:intro:1'
                     intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 or -1.0
@@ -549,7 +581,7 @@ class Recommender:
                     self_care_answer = self.call_poll_ema(message, answer_bank)
 
                 # Sending evening messages logic
-                if event_id == 'evening message':
+                elif event_id == 'evening message':
                     self.recomm_start = False  # recomm should not be sent anymore
                     MESSAGES_SENT_TODAY = 0  # reset messages to 0
 
@@ -559,7 +591,7 @@ class Recommender:
 
                     # send the evening message likert scale----------------------
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
-                    likert_categ = {'stress': 1, 'lonely': 1, 'health': 2}
+                    likert_categ = {'stress': 1, 'lonely': 1, 'health': 2,'interactions':2}
                     category = random.choice(list(likert_categ.keys()))
                     randnum1 = random.randint(1, likert_categ[category])
                     message = 'evening:likert:' + category + ':' + str(randnum1)
@@ -603,10 +635,10 @@ class Recommender:
                         message = 'evening:system:helpful:' + str(randnum2)
                         helpful_answer = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
 
-                # Weekly Survey--------- if one monday and after evening messages
-                if (datetime.today().strftime('%A') == weekly_day) and (event_id == 'evening message'):
-                    # weekly survey question ---------
+                # Weekly Survey--------- if one monday and after evening messages and during real deployment no baseline deployment
+                if (datetime.today().strftime('%A') == weekly_day) and (event_id == 'evening message') and self.fulldeployment_ready():
 
+                    # weekly survey question ---------
                     message = 'weekly:survey:1'  # always send the same survey
                     weekly_answer = self.call_poll_ema(message, all_answers=True)  # any answer mult or skipped: -1.0
 
@@ -743,7 +775,6 @@ class Recommender:
             if acoust_evt and (not self.recomm_start) and empath_return:
                 return None, None
             elif acoust_evt and (not self.recomm_start):
-
                 return None
 
             try:
@@ -917,5 +948,106 @@ class Recommender:
 
         except Exception as e:
             log('Email Alert error:', e)
+
+        return
+
+
+    def baseline_recomm(self, speaker_id):
+        global MESSAGES_SENT_TODAY
+
+        try:
+            self.recomm_in_progress = True  # now in progress
+            MESSAGES_SENT_TODAY += 1 #increase count
+            self.last_action_time = self.timer.now() #start cooldown
+
+            # # baseline detection confirm
+            message = 'baseline:recomm:binaryconfirm:1'
+            answer_bank = [1.0, 0.0, -1.0]
+            # ask if feeling angy yes/no, first question alarm on
+            baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
+                                                     phonealarm='true')
+
+            randnum = random.randint(1, 2)
+            message = 'baseline:recomm:likertconfirm:' + str(randnum)
+            likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
+                                               acoust_evt=True)  # 0 -1.0 or any number on scale
+
+            #dont send if scheduled events have interrupted
+            if self.recomm_start:
+                # send the blank message after everything for both morning and evening messages-------------
+                _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
+
+            log('Baseline Recommendation Messages Sent')
+
+        except Exception as err:
+            log('Baseline Recommendation Confirmation Error', err)
+            self.email_alerts('Baseline Recommendation', str(err), 'Failure in baseline_recomm function',
+                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
+                              urgent=False)
+        finally:
+            self.stop_questions = False  # reset
+            self.recomm_in_progress = False  # reset
+
+        return
+
+
+    def baseline_schedule_evt(self,event_id):
+        global MESSAGES_SENT_TODAY
+
+        try:
+            #evening messages for baseline
+            if event_id == 'evening message':
+                self.recomm_start = False  # recomm should not be sent anymore
+                MESSAGES_SENT_TODAY = 0  # reset messages to 0
+
+                #Likert Stress Question, alarm true for first question
+                message = 'baseline:evening:likertstress:1'
+                answer1 = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # slide bar, 0, or -1.0
+
+                # Likert Lonely Question
+                message = 'baseline:evening:likertlonely:1'
+                answer2 = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
+
+                #Likert Health Question
+                randnum = random.randint(1, 2)
+                message = 'baseline:evening:likerthealth:' + str(randnum)
+                answer3 = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
+
+                # send the blank message after everything for both morning and evening messages-------------
+                _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
+
+                log('Baseline Evening Messages Sent')
+
+        except Exception as err:
+            log('Baseline Scheduled Events Error', err)
+            self.email_alerts('Baseline Scheduled Events', str(err), 'Failure in baseline_schedule_evt function',
+                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
+                              urgent=False)
+
+        return
+
+    def randrecomm_testing(self):
+
+        D_EVT = 5  # dimension of event
+
+        #constantly call recommendations
+        while True:
+            try:
+                evt = np.random.randn(D_EVT)
+
+                #only send if in correct period and no recomm already in progress
+                if self.recomm_start and (not self.recomm_in_progress):
+                    log('Sending artificial random recommendation')
+                    self.dispatch(1, evt)
+
+                #sleep between 5 min to 7 hours till next artificial recommendation
+                sleepfor = random.randint(360, 25200)
+                log('Next artificial random recommendation in',sleepfor//60,'minutes')
+                time.sleep(sleepfor)
+            except Exception as err:
+                log('Artificial Random Recommendation Error', err)
+                self.email_alerts('Artificial random Recommendations', str(err), 'Failure in randrecomm_testing function',
+                                  'Possible sources of error: dispatch function does not have enough arguments',
+                                  urgent=False)
 
         return
