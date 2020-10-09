@@ -590,12 +590,18 @@ class Recommender:
                     evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 msg rec or -1.0 skipped
 
                     # send the evening message likert scale----------------------
-                    # pick random category and random question from the category (numbers represent the amount of questions in category)
-                    likert_categ = {'stress': 1, 'lonely': 1, 'health': 2,'interactions':2}
-                    category = random.choice(list(likert_categ.keys()))
-                    randnum1 = random.randint(1, likert_categ[category])
-                    message = 'evening:likert:' + category + ':' + str(randnum1)
-                    likert_answer = self.call_poll_ema(message, all_answers=True)  # 0 -1.0 or any number on scale
+                    # likert questions evening
+                    evlikertlst = ['stress:1', 'lonely:1', 'health:1', 'health:2', 'interactions:1']
+                    # shuffle the list
+                    random.shuffle(evlikertlst)
+                    ev_i = 0
+                    # send all likert questions in a random order
+                    while ev_i < len(evlikertlst):
+                        # go through list of questions in random order
+                        message = 'evening:likert:' + evlikertlst[ev_i]
+                        answer = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
+                        # increment count
+                        ev_i += 1
 
                     # send the evening message daily goal follow-up ---------------
                     message = 'evening:daily:goal:1'  # always send the same message
@@ -725,7 +731,9 @@ class Recommender:
                 # send the blank message after everything for both morning and evening messages-------------
                 _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
 
-                log(f'Scheduled event sent: {event_id}', timer=self.timer)
+                #log real evening and morning messages, baseline is logged in baseline function
+                if self.fulldeployment_ready():
+                    log(f'Scheduled event sent: {event_id}', timer=self.timer)
 
             except Exception as error:
                 log('Send scheduled action error:', error, timer=self.timer)
@@ -967,8 +975,7 @@ class Recommender:
             baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
                                                      phonealarm='true')
 
-            randnum = random.randint(1, 2)
-            message = 'baseline:recomm:likertconfirm:' + str(randnum)
+            message = 'baseline:recomm:likertconfirm:1'
             likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
                                                acoust_evt=True)  # 0 -1.0 or any number on scale
 
@@ -1000,18 +1007,21 @@ class Recommender:
                 self.recomm_start = False  # recomm should not be sent anymore
                 MESSAGES_SENT_TODAY = 0  # reset messages to 0
 
-                #Likert Stress Question, alarm true for first question
-                message = 'baseline:evening:likertstress:1'
-                answer1 = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # slide bar, 0, or -1.0
-
-                # Likert Lonely Question
-                message = 'baseline:evening:likertlonely:1'
-                answer2 = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
-
-                #Likert Health Question
-                randnum = random.randint(1, 2)
-                message = 'baseline:evening:likerthealth:' + str(randnum)
-                answer3 = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
+                # baseline likert evening questions
+                likertlst = ['likertstress:1', 'likertlonely:1', 'likerthealth:1', 'likerthealth:2','likertinteractions:1']
+                # shuffle the list
+                random.shuffle(likertlst)
+                i = 0
+                # send all likert questions in a random order
+                while i < len(likertlst):
+                    # only make the phone ring on the first quesiton
+                    alarmsetting = 'false'
+                    if i == 0:
+                        alarmsetting = 'true'
+                    message = 'baseline:evening:' + likertlst[i]
+                    answer = self.call_poll_ema(message, all_answers=True,phonealarm=alarmsetting)  # slide bar, 0, or -1.0
+                    # increment count
+                    i += 1
 
                 # send the blank message after everything for both morning and evening messages-------------
                 _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
