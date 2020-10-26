@@ -27,9 +27,10 @@ class LinUCB:
 
       ptas.append(pta)
 
-    choice = np.argmax(ptas)
-    # if np.max(ptas) > 0:
-    #   print(ptas)
+    max_pta = max(ptas)
+    avail_choices = [i for i, v in enumerate(ptas) if v == max_pta]
+    choice = np.random.choice(avail_choices)
+
     if ptas[choice] < 0:
       choice = None
     else:
