@@ -1162,10 +1162,12 @@ class Recommender:
         global BASELINE_TIME
 
         try:
+            savedMemory_path = DIR_PATH.replace('\\', '/').replace('pkg', 'savedMemory.txt')
             #at the start of the deployment check if you need to update the baseline time to make it shorter
             if check_for_prev:
+                # get json directory
                 #this file must exist
-                with open('savedMemory.txt','r') as readFile:
+                with open(savedMemory_path,'r') as readFile:
                     lines = readFile.read()
                     readFile.close()
 
@@ -1182,7 +1184,7 @@ class Recommender:
                         log(f'This deployment is a restart, current baseline time updated to previous: {self.baseline_period}')
 
                 #always update txt with new baseline period
-                with open('savedMemory.txt','w+') as file: #write over existing (allowed to read)
+                with open(savedMemory_path,'w+') as file: #write over existing (allowed to read)
                     #no matter what just update the file with current deployment information (baseline time is the period in seconds)
                     file.write(str(self.home_id)+ "," + str(BASELINE_TIME))
                     file.close()
@@ -1196,7 +1198,7 @@ class Recommender:
                     baseline_time_left = 0
 
                 #update text file the the amount of baseline time left
-                with open('savedMemory.txt', 'w+') as file: # write over existing (allowed to read)
+                with open(savedMemory_path, 'w+') as file: # write over existing (allowed to read)
                     file.write(str(self.home_id) + "," + str(baseline_time_left))
                     file.close()
 
