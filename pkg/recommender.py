@@ -23,7 +23,7 @@ ACTIONS = ['timeout:1', 'timeout:2', 'timeout:3', 'timeout:4', 'timeout:5', 'tim
            'breathing:8',
            'bodyscan:1', 'bodyscan:2', 'enjoyable:1', 'enjoyable:2', 'enjoyable:3', 'enjoyable:4', 'enjoyable:5',
            'enjoyable:6', 'enjoyable:7', 'enjoyable:8']
-POLL_TIME = 120
+
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
 COOLDOWN_TIME = 2400 #40 min
@@ -151,6 +151,10 @@ class Recommender:
         self.care_recipient_name = 'care recipient'  # default
         self.home_id = ''  # default
 
+        # ema keywords
+        self.emaTrue = 'true'
+        self.emaFalse = 'false'
+
         #random generations
         self.randgeneration = True
 
@@ -172,10 +176,12 @@ class Recommender:
 
         #random generation of recommendations
         if self.randgeneration:
-            randrecomm_thread = Thread(target=self.randrecomm_testing())
+            self.artif_recomm_activated = False  # artif recomm activited if no recomm messages sent after random time (reset each evening)
+            randrecomm_thread = Thread(target=self.randrecomm_testing)
             randrecomm_thread.daemon = True
             randrecomm_thread.start()
             self.randrecomm_thread = randrecomm_thread
+
 
     def cooldown_ready(self):
         #true when cooldown for recommendation message is over
@@ -312,7 +318,7 @@ class Recommender:
 
         if self.recomm_start:
             # send the blank message after recommendation
-            _ = call_ema('1', '995', alarm='false', test=self.test_mode)
+            _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)
 
         if 'enjoyable' in CURRENT_RECOMM_CATEGORY:
             self.timer.sleep(3600)  # wait for 60 min if recommendation is enjoyable activity
@@ -359,8 +365,16 @@ class Recommender:
 
         # recomm start could be changed any second by the scheduled events
         if self.recomm_start:
-            # send the blank message
-            _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # even if stop questions
+            # if a missed question send the missed message
+            if self.stop_questions:
+                # in order to send this message
+                self.stop_questions = False  # reset
+                missed_message = 'missed:recomm:1'
+                # send the message
+                self.call_poll_ema(missed_message, all_answers=True)
+            else:
+                # send the blank message
+                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # even if stop questions
 
         return reward
 
@@ -387,7 +401,7 @@ class Recommender:
         answer_bank = [0.0, -1.0]
 
         # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm='true')
+        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue)
 
         # always send the recommendation
         # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
@@ -400,10 +414,17 @@ class Recommender:
         answer, req_id = self.call_poll_ema(msg, answer_bank, speaker_id, empath_return=True,
                                             acoust_evt=True)  # return empath id
 
+        #if a missed question send the missed message
+        if self.recomm_start and self.stop_questions:
+            # in order to send this message
+            self.stop_questions = False  # reset
+            missed_message = 'missed:recomm:1'
+            # send the message
+            self.call_poll_ema(missed_message, all_answers=True)
         # in case of None empath id
-        if (not req_id) and self.recomm_start:
+        elif (not req_id) and self.recomm_start:
             # send directly even if stop questions is true, because get_reward wont be called
-            _ = call_ema('1', '995', alarm='false', test=self.test_mode)
+            _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)
 
         # return the empath id
         return req_id
@@ -492,7 +513,7 @@ class Recommender:
                 elif event_id == 'morning message':
                     # Send the intro morning message
                     message = 'morning:intro:1'
-                    intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 or -1.0
+                    intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue)  # 0.0 or -1.0
                     # send the morning message and positive aspects message---------------
                     send_count = 0
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -583,11 +604,10 @@ class Recommender:
                 # Sending evening messages logic
                 elif event_id == 'evening message':
                     self.recomm_start = False  # recomm should not be sent anymore
-                    MESSAGES_SENT_TODAY = 0  # reset messages to 0
 
                     # send evening intro message -------
                     message = 'evening:intro:1'
-                    evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm='true')  # 0.0 msg rec or -1.0 skipped
+                    evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue)  # 0.0 msg rec or -1.0 skipped
 
                     # send the evening message likert scale----------------------
                     # likert questions evening
@@ -728,8 +748,24 @@ class Recommender:
                                 # reset scheduled events
                                 schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
 
-                # send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
+
+                #when a message isnt answered (missed)
+                if self.stop_questions:
+                    #in order to send this message
+                    self.stop_questions = False #reset
+
+                    # determine which type of series of questions was missed
+                    if event_id == 'evening message':
+                        missed_message = 'missed:evening:1'
+                    elif event_id == 'morning message':
+                        missed_message = 'missed:morning:1'
+
+                    #send the message
+                    self.call_poll_ema(missed_message,all_answers=True) #only send it once
+
+                else:
+                    # send the blank message after everything for both morning and evening messages-------------
+                    _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
 
                 #log real evening and morning messages, baseline is logged in baseline function
                 if self.fulldeployment_ready():
@@ -744,11 +780,22 @@ class Recommender:
             finally:
                 self.stop_questions = False  # reset
 
+                #for both baseline and regular
                 if event_id == 'morning message':
                     self.recomm_start = True  # recomm can now be sent
                     DAILY_RECOMM_DICT = {}  # reset
+
+                    #save the baseline period left
+                    self.savedDeployments(update_baseline_period=True)
                 elif event_id == 'evening message':
+                    #resets
                     self.recomm_start = False  # backup incase error
+                    self.artif_recomm_activated = False  # artif recomm activited if no recomm messages sent after random time
+                    MESSAGES_SENT_TODAY = 0  # reset amount of recommendation messages to 0
+
+                    #save the baseline period left
+                    self.savedDeployments(update_baseline_period=True)
+
                     # send the scheduled email
                     self.email_alerts(scheduled_alert=True)
 
@@ -757,7 +804,7 @@ class Recommender:
                 return
 
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3,
-                      acoust_evt=False, phonealarm='false'):
+                      acoust_evt=False, phonealarm='false',poll_time=120):
 
         # do not send questions if previous question unanswered
         if (self.stop_questions == True) and (empath_return == True):
@@ -775,7 +822,7 @@ class Recommender:
         send_count = 0
         exception_count = 0
         answer = None
-        refresh_poll_time = POLL_TIME
+        refresh_poll_time = poll_time
         # send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
 
@@ -804,6 +851,7 @@ class Recommender:
                                       'Connection Error, WinError failed attempt to make a connection with the phone after 2 attempts',
                                       urgent=False)
                     raise
+
             # answer: None, if nothing is selected...reload
             # any answer other than None
             if (answer != None) and (all_answers == True):
@@ -822,7 +870,7 @@ class Recommender:
 
             # no choice selected ask again
             send_count += 1
-            phonealarm = 'true' #when retry
+            phonealarm = self.emaTrue #when retry
             if send_count == 1:
                 refresh_poll_time = 300  # 5min
             elif send_count == 2:
@@ -835,6 +883,7 @@ class Recommender:
         # no answer given after x attempts
         self.stop_questions = True  # stop this series of questions
         return None
+
 
     def extract_deploy_info(self):
         # default just in case
@@ -894,6 +943,9 @@ class Recommender:
             h_id = names[0][0]
 
             self.home_id = h_id
+
+            #check if this is a restart deployment, update baseline time
+            self.savedDeployments(check_for_prev=True)
 
             log('InformationDeployment.db time read successfully')
 
@@ -961,6 +1013,10 @@ class Recommender:
 
 
     def baseline_recomm(self, speaker_id):
+        """
+        recommendation messages for baseline period
+        :param speaker_id:
+        """
         global MESSAGES_SENT_TODAY
 
         try:
@@ -973,7 +1029,7 @@ class Recommender:
             answer_bank = [1.0, 0.0, -1.0]
             # ask if feeling angy yes/no, first question alarm on
             baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
-                                                     phonealarm='true')
+                                                     phonealarm=self.emaTrue)
 
             message = 'baseline:recomm:likertconfirm:1'
             likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
@@ -981,8 +1037,18 @@ class Recommender:
 
             #dont send if scheduled events have interrupted
             if self.recomm_start:
-                # send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
+                # when a message isnt answered (missed)
+                if self.stop_questions:
+                    # in order to send this message
+                    self.stop_questions = False  # reset
+
+                    missed_message = 'missed:recomm:1'
+
+                    # send the message
+                    self.call_poll_ema(missed_message, all_answers=True)
+                else:
+                    # send the blank message after everything for both morning and evening messages-------------
+                    _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
 
             log('Baseline Recommendation Messages Sent')
 
@@ -999,6 +1065,11 @@ class Recommender:
 
 
     def baseline_schedule_evt(self,event_id):
+        """
+        scheduled events for the baseline period
+
+        :param event_id: specifies the event 'evening message' or 'morning message'
+        """
         global MESSAGES_SENT_TODAY
 
         try:
@@ -1015,16 +1086,16 @@ class Recommender:
                 # send all likert questions in a random order
                 while i < len(likertlst):
                     # only make the phone ring on the first quesiton
-                    alarmsetting = 'false'
+                    alarmsetting = self.emaFalse
                     if i == 0:
-                        alarmsetting = 'true'
+                        alarmsetting = self.emaTrue
                     message = 'baseline:evening:' + likertlst[i]
                     answer = self.call_poll_ema(message, all_answers=True,phonealarm=alarmsetting)  # slide bar, 0, or -1.0
                     # increment count
                     i += 1
 
                 # send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm='false', test=self.test_mode)  # send directly even if stop questions
+                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
 
                 log('Baseline Evening Messages Sent')
 
@@ -1037,6 +1108,12 @@ class Recommender:
         return
 
     def randrecomm_testing(self):
+        """
+        for testing purposes, send artificial recommendations at random times
+        artificial recomms only sent if in the acceptable time interval and no recomm already in prog
+        artificial recomms will be activated for the day if 0 recomm messages set by random time
+        each iteration a new random time is selected
+        """
 
         D_EVT = 5  # dimension of event
 
@@ -1045,15 +1122,24 @@ class Recommender:
             try:
                 evt = np.random.randn(D_EVT)
 
+                # sleep between 5 min to 7 hours till next artificial recommendation
+                sleepfor = random.randint(360, 25200)
+                log('Next artificial random recommendation in', sleepfor // 60, 'minutes')
+                time.sleep(sleepfor)
+
                 #only send if in correct period and no recomm already in progress
                 if self.recomm_start and (not self.recomm_in_progress):
-                    log('Sending artificial random recommendation')
-                    self.dispatch(1, evt)
+                    #also only send if no messages have been sent or artificial recomm already activated for the day
+                    if (MESSAGES_SENT_TODAY == 0) or (self.artif_recomm_activated):
+                        #if no messages by random time
+                        if MESSAGES_SENT_TODAY == 0:
+                            #activate artificial recommendation for the day
+                            self.artif_recomm_activated = True
+                            log('Artificial random recomms activated for today since no recomms have been sent yet')
 
-                #sleep between 5 min to 7 hours till next artificial recommendation
-                sleepfor = random.randint(360, 25200)
-                log('Next artificial random recommendation in',sleepfor//60,'minutes')
-                time.sleep(sleepfor)
+                        log('Sending artificial random recommendation')
+                        self.dispatch(1, evt)
+
             except Exception as err:
                 log('Artificial Random Recommendation Error', err)
                 self.email_alerts('Artificial random Recommendations', str(err), 'Failure in randrecomm_testing function',
@@ -1061,3 +1147,63 @@ class Recommender:
                                   urgent=False)
 
         return
+
+    def savedDeployments(self,check_for_prev=False,update_baseline_period=False):
+        """
+        if check_for_prev is true:
+        check if system is being restarted for the same deployment
+        if system is being restarted for the same deployment, update baseline period from previous deployment baseline period left
+
+        if update_baseline_period is true
+        baseline time updated in file  (called from scheduled events each evening and morning)
+        savedMemory.txt will always have one line max like this: 'homeid,baselineperiodleft'
+        baseline periodleft is stored in seconds, if baseline period was over, 0 is stored
+        """
+        global BASELINE_TIME
+
+        try:
+            savedMemory_path = DIR_PATH.replace('\\', '/').replace('pkg', 'savedMemory.txt')
+            #at the start of the deployment check if you need to update the baseline time to make it shorter
+            if check_for_prev:
+                # get json directory
+                #this file must exist
+                with open(savedMemory_path,'r') as readFile:
+                    lines = readFile.read()
+                    readFile.close()
+
+                #if there is information in file, check if same deployment
+                if lines != '':
+                    lines = lines.strip().split(',')
+                    previousHomeId = (lines[0]).strip()
+                    #check if this is a continuation of a previous deployment
+                    if previousHomeId == (str(self.home_id)).strip():
+                        #update baseline time just in case we need it in future
+                        BASELINE_TIME = int(float((lines[1]).strip())) #incase string was a float
+                        #replace baseline time with the last known baseline time left from prev deployment
+                        self.baseline_period = timedelta(seconds=BASELINE_TIME)
+                        log(f'This deployment is a restart, current baseline time updated to previous: {self.baseline_period}')
+
+                #always update txt with new baseline period
+                with open(savedMemory_path,'w+') as file: #write over existing (allowed to read)
+                    #no matter what just update the file with current deployment information (baseline time is the period in seconds)
+                    file.write(str(self.home_id)+ "," + str(BASELINE_TIME))
+                    file.close()
+
+            elif update_baseline_period:
+                #calculate amount of baseline time left (in seconds)
+                baseline_time_left = int((self.baseline_period).total_seconds()) - (self.timer.now() - self.baseline_start).seconds
+
+                #if the baseline time is over, just make it 0 seconds
+                if baseline_time_left <= 0:
+                    baseline_time_left = 0
+
+                #update text file the the amount of baseline time left
+                with open(savedMemory_path, 'w+') as file: # write over existing (allowed to read)
+                    file.write(str(self.home_id) + "," + str(baseline_time_left))
+                    file.close()
+
+        except Exception as err:
+            log('savedMemory.txt Error', err)
+            self.email_alerts('savedMemory.txt', str(err), 'Failure in savedDeployment function',
+                              'Possible sources of error: savedMemory.txt does not exist, format in this file might be wrong, type error',
+                              urgent=True)

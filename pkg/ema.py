@@ -253,6 +253,11 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
     if '[care recipient name]' in message:
         message = message.replace('[care recipient name]',care_recipient_name)
 
+    if '[TIME]' in message:
+        now = datetime.datetime.now()
+        missed_time = now.strftime('%#I:%M%p')
+        message = message.replace('[TIME]',missed_time)
+
     #if message is multiple choice/radio button, retrieve answer choices.
     #if message is extra morning msg, replace answer choices with thanks
     if ('[]' in message) or extra_morning_msg:
@@ -309,6 +314,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
         update_query = "UPDATE ema_settings SET value = %s WHERE suid = %s AND object = %s AND name like %s"
         #cursor.execute(update_query,(binary_prompt, '23','6747','question'))
         cursor.execute(update_query,(binary_prompt, str(suid), vsid,'question'))
+
 
         db.commit()
     except Exception as err:
