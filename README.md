@@ -26,6 +26,8 @@ recomm.dispatch(speaker_id, evt)
 - **reward_data**: Information of all prompts sent to the phone are stored in this table
 	This table holds the following: empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded
 - **ema_storing_data**: Information pertaining only to recommendation messages sent are stored in this table
-	This table holds the following: time,event_vct,stats_vct,action,reward,action_vct,uploaded
+	This table holds the following: time,event_vct,stats_vct,action,reward,action_vct,message_name,uploaded
+- **recomm_saved_memory**: One row containing the unique deployment home id, baseline period time left in seconds, and the most recent time the baseline period left was updated.
+	This table holds the following: deploymentID, baselineTimeLeft, lastUpdated
 - **ema_settings**: Used to dynamically change prompts and answer choices 
 - **ema_data**: Used to retrieve prompt answer

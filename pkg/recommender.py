@@ -291,7 +291,8 @@ class Recommender:
                     'stats_vct': self.stats.vct.tolist(),
                     'action': action_idx,
                     'reward': reward,
-                    'action_ucbs': ucbs
+                    'action_ucbs': ucbs,
+                    'message_name': 'daytime:recomm:' + ACTIONS[action_idx]
                 })
 
                 log('reward retrieved', reward)
@@ -438,13 +439,14 @@ class Recommender:
         action = data['action']
         reward = data['reward']
         action_ucbs = json.dumps(data['action_ucbs'])
+        message_name = json.dumps(data['message_name'])
         time = self.timer.now()
 
         # inserting into ema_storing_data table
         # prepare query to insert into ema_storing_data table
-        insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,uploaded) \
-                 VALUES ('%s','%s','%s','%s', '%s','%s','%s')" % \
-                       (time, event_vct, stats_vct, action, reward, action_ucbs, 0)
+        insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,message_name,uploaded) \
+                 VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s')" % \
+                       (time, event_vct, stats_vct, action, reward, action_ucbs, message_name,0)
         # insert the data
         try:
             db = get_conn()
@@ -792,6 +794,7 @@ class Recommender:
                     self.recomm_start = False  # backup incase error
                     self.artif_recomm_activated = False  # artif recomm activited if no recomm messages sent after random time
                     MESSAGES_SENT_TODAY = 0  # reset amount of recommendation messages to 0
+                    EXTRA_ENCRGMNT = ''
 
                     #save the baseline period left
                     self.savedDeployments(update_baseline_period=True)
@@ -847,7 +850,7 @@ class Recommender:
                     time.sleep(600) #10 min
                     pass
                 else:
-                    self.email_alerts('call_ema or poll_ema error', str(err),'Failure in call_ema or poll_ema functions',
+                    self.email_alerts('call_ema or poll_ema error', str(e),'Failure in call_ema or poll_ema functions',
                                       'Connection Error, WinError failed attempt to make a connection with the phone after 2 attempts',
                                       urgent=False)
                     raise
@@ -1155,55 +1158,85 @@ class Recommender:
         if system is being restarted for the same deployment, update baseline period from previous deployment baseline period left
 
         if update_baseline_period is true
-        baseline time updated in file  (called from scheduled events each evening and morning)
-        savedMemory.txt will always have one line max like this: 'homeid,baselineperiodleft'
+        baseline time updated in recomm_saved_memory (called from scheduled events each evening and morning)
+        recomm_saved_memory will always have one row
         baseline periodleft is stored in seconds, if baseline period was over, 0 is stored
         """
         global BASELINE_TIME
 
-        try:
-            savedMemory_path = DIR_PATH.replace('\\', '/').replace('pkg', 'savedMemory.txt')
-            #at the start of the deployment check if you need to update the baseline time to make it shorter
-            if check_for_prev:
-                # get json directory
-                #this file must exist
-                with open(savedMemory_path,'r') as readFile:
-                    lines = readFile.read()
-                    readFile.close()
+        #at the start of the deployment check if you need to update the baseline time to make it shorter
+        if check_for_prev:
 
-                #if there is information in file, check if same deployment
-                if lines != '':
-                    lines = lines.strip().split(',')
-                    previousHomeId = (lines[0]).strip()
-                    #check if this is a continuation of a previous deployment
-                    if previousHomeId == (str(self.home_id)).strip():
-                        #update baseline time just in case we need it in future
-                        BASELINE_TIME = int(float((lines[1]).strip())) #incase string was a float
-                        #replace baseline time with the last known baseline time left from prev deployment
-                        self.baseline_period = timedelta(seconds=BASELINE_TIME)
-                        log(f'This deployment is a restart, current baseline time updated to previous: {self.baseline_period}')
+            #default
+            baseline_time_left = BASELINE_TIME
 
-                #always update txt with new baseline period
-                with open(savedMemory_path,'w+') as file: #write over existing (allowed to read)
-                    #no matter what just update the file with current deployment information (baseline time is the period in seconds)
-                    file.write(str(self.home_id)+ "," + str(BASELINE_TIME))
-                    file.close()
+            #retrieve saved data from recomm_saved_memory table
+            try:
+                db = get_conn()
+                cursor = db.cursor()
 
-            elif update_baseline_period:
-                #calculate amount of baseline time left (in seconds)
-                baseline_time_left = int((self.baseline_period).total_seconds()) - (self.timer.now() - self.baseline_start).seconds
+                query = "SELECT deploymentID, baselineTimeLeft FROM recomm_saved_memory"
+                data = cursor.execute(query)
+                mystoredData = cursor.fetchone()  #fetches first row of the record
 
-                #if the baseline time is over, just make it 0 seconds
-                if baseline_time_left <= 0:
-                    baseline_time_left = 0
+                #save information from table
+                prev_home_id = mystoredData[0]
+                prev_base_time_left = mystoredData[1]
 
-                #update text file the the amount of baseline time left
-                with open(savedMemory_path, 'w+') as file: # write over existing (allowed to read)
-                    file.write(str(self.home_id) + "," + str(baseline_time_left))
-                    file.close()
+                # check if this is a continuation of a previous deployment
+                if prev_home_id == (str(self.home_id)).strip():
+                    # update baseline time just in case we need it in future
+                    BASELINE_TIME = int(float((prev_base_time_left).strip()))  # incase string was a float
+                    # set the time period left
+                    baseline_time_left = BASELINE_TIME
+                    # replace baseline time with the last known baseline time left from prev deployment
+                    self.baseline_period = timedelta(seconds=BASELINE_TIME)
+                    log(f'This deployment is a restart, baseline period updated to previous: {self.baseline_period}')
+                else:
+                    log(f'This is a new deployment, baseline period: {self.baseline_period}')
 
-        except Exception as err:
-            log('savedMemory.txt Error', err)
-            self.email_alerts('savedMemory.txt', str(err), 'Failure in savedDeployment function',
-                              'Possible sources of error: savedMemory.txt does not exist, format in this file might be wrong, type error',
-                              urgent=True)
+            except Exception as err:
+                log('savedDeployments Error', err)
+                self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, select query',
+                                  'Possible sources of error: no row exists, format issue, BASELINE_TIME, comparing issue',
+                                  urgent=True)
+                db.rollback()
+            finally:
+                db.close()
+        elif update_baseline_period:
+            # calculate amount of baseline time left (in seconds)
+            baseline_time_left = int((self.baseline_period).total_seconds()) - int((self.timer.now() - self.baseline_start).total_seconds())
+
+            if baseline_time_left <= 0:
+                baseline_time_left = 0
+
+
+        #in any case update the table with either new data or updated data
+        if check_for_prev or update_baseline_period:
+            #insert homeid, baselinetimeleft and current time to recomm_saved_memory table
+            try:
+                db = get_conn()
+                cursor = db.cursor()
+
+                #insert to the first row of the table!! (assuming always only one row)
+                update_query = "UPDATE recomm_saved_memory SET deploymentID = %s, baselineTimeLeft = %s, lastUpdated = %s LIMIT 1"
+
+                # change time to date time format
+                update_time = str(datetime.fromtimestamp(int(time.time())))
+
+                # no matter what just update the table with new deployment information or the remaining baseline time (baseline time is the period in seconds)
+                cursor.execute(update_query,(str(self.home_id),str(baseline_time_left),update_time))
+                db.commit()
+
+                log(f'recomm_saved_memory table updated. Baseline period remaining: {baseline_time_left} seconds')
+
+            except Exception as err:
+                log('savedDeployments Error', err)
+                self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, update query',
+                                  'Possible sources of error: no row exists, format issue, baseline_time_left',
+                                  urgent=True)
+                db.rollback()
+            finally:
+                db.close()
+
+
