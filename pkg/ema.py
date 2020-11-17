@@ -148,12 +148,12 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
                 time_received = str(
                     datetime.datetime.fromtimestamp(int(end_time)))
 
-                update_query = "UPDATE reward_data SET TimeReceived = %s, Response = %s WHERE empathid = %s"
+                update_query = "UPDATE reward_data SET TimeReceived = %s, Response = %s, Uploaded = %s WHERE empathid = %s"
 
                 try:
                     cursor.execute(
                         update_query,
-                        (time_received, answer, empathid)
+                        (time_received, answer, 0, empathid)
                     )
                     db.commit()
                 except Exception as err:
