@@ -169,7 +169,7 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
     return answer
 
 
-def setup_message(message_name, test=False, caregiver_name='caregiver', care_recipient_name='care recipient'):
+def setup_message(message_name, test=False, caregiver_name='caregiver', care_recipient_name='care recipient',msd_time='0:00am'):
     #default
     extra_morning_msg = False
 
@@ -240,6 +240,23 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             #add image to message
             message = message + html_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
 
+    #Check for Audio
+    if '[Audio:' in message:
+        #[Audio:audioname.mp3]
+        
+        #find where '[Audio: starts
+        firstIndexAud = message.find('[Audio:')
+        #find where ends
+        endIndexAud = message.find(']')
+        #add 7 to account for "[Audio:
+        audioFileName = message[firstIndexAud+7:endIndexAud]
+        #remove the audioFile name from message
+        message = message.replace('[Audio:'+audioFileName+']',"")
+
+        #add the audiofile at the end of the message
+        message = message + html_newline + cntr + '<audio controls><source src="http://191.168.0.107/ema_images/' + audioFileName + '" type="audio/mpeg"></audio>' + end_cntr
+
+
     #check in messages
     if '[distractions]' in message:
         randdist = random.randint(0, len(json_prompts['recomm:checkin:distract'])-1)
@@ -254,9 +271,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
         message = message.replace('[care recipient name]',care_recipient_name)
 
     if '[TIME]' in message:
-        now = datetime.datetime.now()
-        missed_time = now.strftime('%#I:%M%p')
-        message = message.replace('[TIME]',missed_time)
+        message = message.replace('[TIME]',msd_time)
 
     #if message is multiple choice/radio button, retrieve answer choices.
     #if message is extra morning msg, replace answer choices with thanks

@@ -21,13 +21,14 @@ ACTIONS = ['timeout:1', 'timeout:2', 'timeout:3', 'timeout:4', 'timeout:5', 'tim
            'timeout:9',
            'breathing:1', 'breathing:2', 'breathing:3', 'breathing:4', 'breathing:5', 'breathing:6', 'breathing:7',
            'breathing:8',
-           'bodyscan:1', 'bodyscan:2', 'enjoyable:1', 'enjoyable:2', 'enjoyable:3', 'enjoyable:4', 'enjoyable:5',
+           'bodyscan:1', 'bodyscan:2',
+           'enjoyable:1', 'enjoyable:2', 'enjoyable:3', 'enjoyable:4', 'enjoyable:5',
            'enjoyable:6', 'enjoyable:7', 'enjoyable:8']
 
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
 COOLDOWN_TIME = 2400 #40 min
-BASELINE_TIME = 604800 #1 week
+BASELINE_TIME = 2628000 #1 month
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
@@ -156,7 +157,7 @@ class Recommender:
         self.emaFalse = 'false'
 
         #random generations
-        self.randgeneration = True
+        self.randgeneration = False
 
         # Default start and end time
         self.time_morn_delt = timedelta(hours=10, minutes=1)
@@ -331,14 +332,14 @@ class Recommender:
         message = 'daytime:postrecomm:implement:1'
         answer_bank = [1.0, 0.0, -1.0]
         # ask if stress management tip was done (yes no) question
-        postrecomm_answer = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True)
+        postrecomm_answer = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, ifmissed='missed:recomm:1')
 
         # if done (Yes)
         if postrecomm_answer == 1.0:
             reward = 1.0
             message = 'daytime:postrecomm:helpfulyes:1'
             helpful_yes = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
-                                             acoust_evt=True)  # return all answers
+                                             acoust_evt=True, ifmissed='missed:recomm:1')  # return all answers
 
             if helpful_yes and (helpful_yes != -1.0):  # dont want to add None to list
                 # store the category of recommendation and how helpful it was
@@ -354,28 +355,25 @@ class Recommender:
 
             # if helpful_no: #multiple choice 1 2 or 3
             helpful_no = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
-                                            acoust_evt=True)  # return all answers
+                                            acoust_evt=True, ifmissed='missed:recomm:1')  # return all answers
 
         # check if they want more morning encourement msg
         if EXTRA_ENCRGMNT:
             # send extra encrgment msg from morning message
             message = EXTRA_ENCRGMNT
             # ask until skipped: -1.0, 3 reloads: None, or an answer
-            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True, acoust_evt=True)
+            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True, acoust_evt=True, ifmissed='missed:recomm:1')
             EXTRA_ENCRGMNT = ''
 
         # recomm start could be changed any second by the scheduled events
         if self.recomm_start:
-            # if a missed question send the missed message
+            #if there is a missed message and it was not answered, reset stop questions and keep message on screen
             if self.stop_questions:
-                # in order to send this message
                 self.stop_questions = False  # reset
-                missed_message = 'missed:recomm:1'
-                # send the message
-                self.call_poll_ema(missed_message, all_answers=True)
-            else:
-                # send the blank message
-                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # even if stop questions
+                #Dont send message to keep the missed message on the screen
+            elif (not self.stop_questions): #only send if the last question was answered
+                # send the blank message if survey is completed
+                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode) 
 
         return reward
 
@@ -395,14 +393,14 @@ class Recommender:
         if self.mock:
             return 'mock_id'
 
-        # Send check in question (prequestion) pick random question
-        randnum1 = random.randint(1, 5)
-        message = 'daytime:check_in:' + str(randnum1)
+        # Send check in question (prequestion) pick random question (Not anymore)
+        #randnum1 = str(random.randint(1, 5))
+        message = 'daytime:check_in:1'
         # send recommendation if they answer thanks! or dont select choice
         answer_bank = [0.0, -1.0]
 
         # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue)
+        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
 
         # always send the recommendation
         # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
@@ -411,21 +409,21 @@ class Recommender:
         r_cat = ''.join(letter for letter in recomm_id if not letter.isdigit())
         CURRENT_RECOMM_CATEGORY = r_cat.replace(':', '')
         msg = 'daytime:recomm:' + recomm_id
+
         answer_bank = [0.0]  # message received 0.0
         answer, req_id = self.call_poll_ema(msg, answer_bank, speaker_id, empath_return=True,
-                                            acoust_evt=True)  # return empath id
+                                            acoust_evt=True, ifmissed='missed:recomm:1')  # return empath id
+        #req_id is none when stop questions
 
         #if a missed question send the missed message
-        if self.recomm_start and self.stop_questions:
-            # in order to send this message
-            self.stop_questions = False  # reset
-            missed_message = 'missed:recomm:1'
-            # send the message
-            self.call_poll_ema(missed_message, all_answers=True)
-        # in case of None empath id
-        elif (not req_id) and self.recomm_start:
-            # send directly even if stop questions is true, because get_reward wont be called
-            _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)
+        if self.recomm_start: 
+            if self.stop_questions:
+                self.stop_questions = False  # reset to allow for new question to be sent
+                #dont sent message, keep missed message on screen
+            #If answered, send this screen as a wait screen. in case of None empath id
+            elif (not self.stop_questions):
+                # send directly even if stop questions is true, because get_reward wont be called
+                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)
 
         # return the empath id
         return req_id
@@ -515,7 +513,7 @@ class Recommender:
                 elif event_id == 'morning message':
                     # Send the intro morning message
                     message = 'morning:intro:1'
-                    intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue)  # 0.0 or -1.0
+                    intro_answer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue, ifmissed='missed:morning:1')  # 0.0 or -1.0
                     # send the morning message and positive aspects message---------------
                     send_count = 0
                     # pick random category and random question from the category (numbers represent the amount of questions in category)
@@ -525,7 +523,7 @@ class Recommender:
                     # send 3 times (each question will wait 120 seconds (2 min))
                     message = 'morning:positive:' + category + ':' + str(randnum2)
                     # textbox, thanks: 0.0, or no choice: -1.0
-                    reflection_answer = self.call_poll_ema(message, all_answers=True)
+                    reflection_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:morning:1')
 
                     # send the encouragement message ----------------------------
                     # Figure out what encouragement message to send based on the average recommendation helpfulness and the amount of recommendations per day
@@ -577,7 +575,7 @@ class Recommender:
                     message = 'morning:encouragement:' + encourage_category + ':' + str(
                         randnum3) + '<>' + recomm_category
                     answer_bank = [1, 2, 3, -1.0]
-                    enc_answer = self.call_poll_ema(message, answer_bank)
+                    enc_answer = self.call_poll_ema(message, answer_bank, ifmissed='missed:morning:1')
 
                     # always sending a general question (make sure not to send the same question as before
                     randnum4 = random.choice(
@@ -588,7 +586,7 @@ class Recommender:
                     # if they answer send more encouraging messages (send general encouragement)
                     if enc_answer == 1:
                         extra_msg_answer = self.call_poll_ema(extra_msg_name,
-                                                              all_answers=True)  # all answers thanks or skip -1.0
+                                                              all_answers=True, ifmissed='missed:morning:1')  # all answers thanks or skip -1.0
 
                     # if they answer send more later today
                     elif enc_answer == 2:
@@ -601,15 +599,16 @@ class Recommender:
                     randnum5 = random.randint(1, 3)
                     message = 'morning:self_care_goal' + ':' + str(randnum5)
                     answer_bank = [0.0, -1.0]  # okay or skip
-                    self_care_answer = self.call_poll_ema(message, answer_bank)
+                    self_care_answer = self.call_poll_ema(message, answer_bank, ifmissed='missed:morning:1')
 
                 # Sending evening messages logic
                 elif event_id == 'evening message':
                     self.recomm_start = False  # recomm should not be sent anymore
+                    self.stop_questions = False #reset to allow for questions to be sent 
 
                     # send evening intro message -------
                     message = 'evening:intro:1'
-                    evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue)  # 0.0 msg rec or -1.0 skipped
+                    evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue, ifmissed='missed:evening:1')  # 0.0 msg rec or -1.0 skipped
 
                     # send the evening message likert scale----------------------
                     # likert questions evening
@@ -621,64 +620,66 @@ class Recommender:
                     while ev_i < len(evlikertlst):
                         # go through list of questions in random order
                         message = 'evening:likert:' + evlikertlst[ev_i]
-                        answer = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
+                        answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
                         # increment count
                         ev_i += 1
 
                     # send the evening message daily goal follow-up ---------------
                     message = 'evening:daily:goal:1'  # always send the same message
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    goal_answer = self.call_poll_ema(message, answer_bank)
+                    goal_answer = self.call_poll_ema(message, answer_bank, ifmissed='missed:evening:1')
 
                     # if yes
                     if goal_answer == 1.0:
                         # send the good job! message
                         message = 'evening:daily:goalyes:1'  # always send the same message
-                        thanks_answer = self.call_poll_ema(message, all_answers=True)  # thanks 0.0, skipped -1.0
+                        thanks_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # thanks 0.0, skipped -1.0
                     # if no
                     elif goal_answer == 0.0:
                         # send the multiple choice question asking why
                         message = 'evening:daily:goalno:1'  # always send the same message
-                        multiple_answer = self.call_poll_ema(message, all_answers=True)  # multiple choice or skipped
+                        multiple_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # multiple choice or skipped
 
                     # ask about recommendations questions---------------
                     recomm_answer = -1.0  # default for system helpful question
                     message = 'evening:stress:manag:1'  # always send the same message
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    recomm_answer = self.call_poll_ema(message, answer_bank)
+                    recomm_answer = self.call_poll_ema(message, answer_bank, ifmissed='missed:evening:1')
                     # if yes
                     if recomm_answer == 1.0:
                         message = 'evening:stress:managyes:1'  # always send the same message
-                        stress1_answer = self.call_poll_ema(message, all_answers=True)
+                        stress1_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')
 
                     # if no
                     elif recomm_answer == 0.0:
                         # send the multiple choice question asking why
                         message = 'evening:stress:managno:1'  # always send the same message
-                        mult_answer = self.call_poll_ema(message, all_answers=True)  # multiple choice or skipped
+                        mult_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # multiple choice or skipped
 
                     # send the evening message system helpful questions (only if they did stress management)---------------
                     if recomm_answer == 1.0:
                         randnum2 = random.randint(1, 3)  # pick 1 of 3 questions
                         message = 'evening:system:helpful:' + str(randnum2)
-                        helpful_answer = self.call_poll_ema(message, all_answers=True)  # slide bar, 0, or -1.0
+                        helpful_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
 
-                # Weekly Survey--------- if one monday and after evening messages and during real deployment no baseline deployment
+                # Weekly Survey Part 1--------- if one monday and after evening messages and during real deployment no baseline deployment
                 if (datetime.today().strftime('%A') == weekly_day) and (event_id == 'evening message') and self.fulldeployment_ready():
 
                     # weekly survey question ---------
                     message = 'weekly:survey:1'  # always send the same survey
-                    weekly_answer = self.call_poll_ema(message, all_answers=True)  # any answer mult or skipped: -1.0
-
+                    weekly_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # any answer mult or skipped: -1.0
+               
+                #Weekly Survey Part 2--------- if monday and after evening messages (These are also sent during baseline period)               
+                if (datetime.today().strftime('%A') == weekly_day) and (event_id == 'evening message'):
                     # Number of questions ------------
                     message = 'weekly:messages:1'  # always send the same survey
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    good_ques = self.call_poll_ema(message, answer_bank)
+                    good_ques = self.call_poll_ema(message, answer_bank, ifmissed='missed:evening:1')
 
                     # if no: 0.0 (not okay with the number of questions), if yes (1.0) no change
                     if good_ques == 0.0:
                         message = 'weekly:messages:no:1'  # always send the same survey
-                        number_ques = self.call_poll_ema(message, all_answers=True)  # multiple choice
+                        number_ques = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # multiple choice
 
                         max_messages_delta = 1  # change by one message
                         # if 1 they want more messages
@@ -693,11 +694,11 @@ class Recommender:
                     # Time between questions ---------------
                     message = 'weekly:msgetime:1'  # always send the same question
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    good_time = self.call_poll_ema(message, answer_bank)  # multiple choice
+                    good_time = self.call_poll_ema(message, answer_bank, ifmissed='missed:evening:1')  # multiple choice
                     # if no: 0.0(they want more time between questions), if yes 1.0, no change
                     if good_time == 0:
                         message = 'weekly:msgetime:no:1'  # always send the same survey
-                        number_ques = self.call_poll_ema(message, all_answers=True)  # multiple choice
+                        number_ques = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # multiple choice
 
                         cooldown_delta = 300  # change by 5 min
                         # if 1 they want more time between messages
@@ -713,12 +714,12 @@ class Recommender:
                     change_by_min = [0, -30, 0, -30, 0, 30, 0, 30, 0]
                     message = 'weekly:startstop:1'  # always send the same survey
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
-                    good_startstop = self.call_poll_ema(message, answer_bank)
+                    good_startstop = self.call_poll_ema(message, answer_bank, ifmissed='missed:evening:1')
 
                     # if no (they want different start stop time)
                     if good_startstop == 0.0:
                         message = 'weekly:startstop:start:1'  # always send the same survey
-                        start_time = self.call_poll_ema(message, all_answers=True)
+                        start_time = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')
 
                         # each answer choice represents a different change to start time (1-9)
                         if start_time and (start_time != -1.0):
@@ -736,7 +737,7 @@ class Recommender:
 
                         # send question about evening end time change
                         message = 'weekly:startstop:stop:1'
-                        stop_time = self.call_poll_ema(message, all_answers=True)  # multiple choice
+                        stop_time = self.call_poll_ema(message, all_answers=True,ifmissed='missed:evening:1')  # multiple choice
 
                         if stop_time and (stop_time != -1.0):  # answer 1-9 (matches the list above)
                             # already 30 min before end time
@@ -749,22 +750,17 @@ class Recommender:
                             if (evening_timedelta < timedelta(hours=23,minutes=59)):
                                 # reset scheduled events
                                 schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
-
+                
+                #Reminder Messages ---- After weekly survey or at the end of evening messages...even during baseline               
+                if event_id == 'evening message':
+                    # Send reminder about batter
+                    message = 'evening:reminder:battery:1'
+                    battery_answer = self.call_poll_ema(message, all_answers=True,ifmissed='missed:evening:1')  # multiple choice
 
                 #when a message isnt answered (missed)
                 if self.stop_questions:
-                    #in order to send this message
                     self.stop_questions = False #reset
-
-                    # determine which type of series of questions was missed
-                    if event_id == 'evening message':
-                        missed_message = 'missed:evening:1'
-                    elif event_id == 'morning message':
-                        missed_message = 'missed:morning:1'
-
-                    #send the message
-                    self.call_poll_ema(missed_message,all_answers=True) #only send it once
-
+                    #missed message stays on screen
                 else:
                     # send the blank message after everything for both morning and evening messages-------------
                     _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
@@ -792,6 +788,7 @@ class Recommender:
                 elif event_id == 'evening message':
                     #resets
                     self.recomm_start = False  # backup incase error
+                    self.stop_questions = False #reset incase error
                     self.artif_recomm_activated = False  # artif recomm activited if no recomm messages sent after random time
                     MESSAGES_SENT_TODAY = 0  # reset amount of recommendation messages to 0
                     EXTRA_ENCRGMNT = ''
@@ -807,7 +804,7 @@ class Recommender:
                 return
 
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3,
-                      acoust_evt=False, phonealarm='false',poll_time=120):
+                      acoust_evt=False, phonealarm='false',poll_time=300,ifmissed='missed:recomm:1'):
 
         # do not send questions if previous question unanswered
         if (self.stop_questions == True) and (empath_return == True):
@@ -815,10 +812,13 @@ class Recommender:
         elif self.stop_questions == True:
             return None
 
+        #get the time of the first message sent only once
+        missed_time = self.get_time()
+
         # setup question only once, send the same question all three times
         suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name = setup_message(msg, test=self.test_mode,
                                                                                         caregiver_name=self.caregiver_name,
-                                                                                        care_recipient_name=self.care_recipient_name)
+                                                                                        care_recipient_name=self.care_recipient_name, msd_time=missed_time)
         setup_lst = [suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name]
 
         req_id = None
@@ -826,9 +826,11 @@ class Recommender:
         exception_count = 0
         answer = None
         refresh_poll_time = poll_time
+        missed_msg_sent = 0 #only send missed msg once if never answered (default), send another time if second chance also no answer
+
         # send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
-
+           
             # dont continue acoust if scheduled evt
             if acoust_evt and (not self.recomm_start) and empath_return:
                 return None, None
@@ -875,18 +877,101 @@ class Recommender:
             send_count += 1
             phonealarm = self.emaTrue #when retry
             if send_count == 1:
-                refresh_poll_time = 300  # 5min
-            elif send_count == 2:
                 refresh_poll_time = 600  # 10min
+            elif send_count == 2:
+                refresh_poll_time = 1200  # 20min
+        
+            #once sent x times and still no answer and msd msg has not been sent before, send missed message
+            if (send_count == remind_amt) and (missed_msg_sent < 2):
+
+                #quick thread sanity check (dont continue acoust if scheduled evt)
+                if acoust_evt and (not self.recomm_start) and empath_return:
+                    return None, None
+                elif acoust_evt and (not self.recomm_start):
+                    return None
+
+                #send the missed message. pass in missed:recomm:1, 3:27pm, 1 for example
+                continue_answer = self.send_missed_msg(ifmissed,missed_time,speaker_id, missed_msg_sent) #returns true or false
+            
+                #if answered the first time, re-send the last message (Second chance)
+                if (continue_answer == True) and (missed_msg_sent == 0):
+                    send_count-=1 #one more opportunity
+                    refresh_poll_time = 120 #give 2 min to answer question
+
+                    #must setup question again since previous question was a different message
+                    suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name = setup_message(msg, test=self.test_mode,
+                                                                                        caregiver_name=self.caregiver_name,
+                                                                                        care_recipient_name=self.care_recipient_name, msd_time=missed_time)
+                    setup_lst = [suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name]
+                
+                #max send missed msg 2 times, second time if second chance is also missed (poll for 1 second)
+                missed_msg_sent+=1 #so we dont dont get stuck here
+
+                
+        # no answer given after x attempts
+        self.stop_questions = True  # stop this series of questions
 
         # send recomm case need empath even if no answer
         if empath_return == True:
-            return None, req_id
+            return None, None
 
-        # no answer given after x attempts
-        self.stop_questions = True  # stop this series of questions
+        #none when no answer
         return None
 
+    def send_missed_msg(self,missed_msg_name,first_missed_time,speaker_id, msd_msg_sent):
+        '''
+        Send the missed message once and poll for results
+        Return true if the  message was answered and false if the message was not answered
+        10 minutes to respond
+
+            (If the missed message is answered, the last message will be sent again in `call_poll_ema` only 1 time
+            If the last message is not answered again, the 'thank you, that is all message' message is sent'
+            user as 2 min to answer that last message)
+        '''
+        # setup question only once, send the same question all three times
+        msd_suid,msd_retrieval_object, msd_qtype, msd_stored_msg_sent, msd_stored_msg_name = setup_message(missed_msg_name, test=self.test_mode,
+                                                                                        caregiver_name=self.caregiver_name,
+                                                                                        care_recipient_name=self.care_recipient_name, msd_time=first_missed_time)
+        msd_setup_lst = [msd_suid, msd_retrieval_object, msd_qtype, msd_stored_msg_sent, msd_stored_msg_name]
+
+        msd_req_id = None
+
+        #if first time sent, wait 10 min
+        if msd_msg_sent == 0:
+            msd_refresh_poll_time = 600 #10 min
+        else:
+            msd_refresh_poll_time = 1 #1 second because dont wait
+      
+        try:
+            # returns empathid, the polling object (for different types of questions from ema_data), and question type
+            msd_req_id, msd_retrieval_object, msd_qtype = call_ema(speaker_id, test=self.test_mode, already_setup=msd_setup_lst, alarm='false')
+            missed_answer = poll_ema(speaker_id, msd_req_id, -1, msd_retrieval_object, msd_qtype,
+                                duration=(msd_refresh_poll_time if not self.test_mode else 0.1),
+                                freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
+        except Exception as e:
+            log('send_missed_msg', e)
+            self.email_alerts('send_missed_msg', str(e),'Failure in send_missed_msg function',
+                                'Connection Error, setup_message, call_ema, or poll_ema',
+                                urgent=False)
+
+        # answer: None, if nothing is selected
+        # any answer other than None
+        if (missed_answer != None): #since all answers are accepted
+            #if answered missed message (clicked message received button)
+            return True
+        else:
+            #if missed message is not answered
+            return False
+    
+    def get_time(self):
+        '''
+        return the current time as a string
+        '''
+        #get current time
+        now = datetime.now()
+        #string format: 3:27pm
+        missed_time = now.strftime('%#I:%M%p')
+        return missed_time
 
     def extract_deploy_info(self):
         # default just in case
@@ -898,7 +983,7 @@ class Recommender:
             depl_info_path = DIR_PATH.replace('\\', '/').replace('caregiver_recomm/pkg', 'DeploymentInformation.db')
             # if file doesnt exist revert to testing path
             depl_info_path = depl_info_path if os.path.isfile(depl_info_path) else \
-                'C:/Users/Obesity_Project/Desktop/Patient-Caregiver Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
+                'C:/Users/Woodpecker/Desktop/Patient-Caregiver-Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
 
             con = None
             con = sqlite3.connect(depl_info_path)
@@ -1032,11 +1117,11 @@ class Recommender:
             answer_bank = [1.0, 0.0, -1.0]
             # ask if feeling angy yes/no, first question alarm on
             baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
-                                                     phonealarm=self.emaTrue)
+                                                     phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
 
             message = 'baseline:recomm:likertconfirm:1'
             likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
-                                               acoust_evt=True)  # 0 -1.0 or any number on scale
+                                               acoust_evt=True, ifmissed='missed:recomm:1')  # 0 -1.0 or any number on scale
 
             #dont send if scheduled events have interrupted
             if self.recomm_start:
@@ -1044,11 +1129,7 @@ class Recommender:
                 if self.stop_questions:
                     # in order to send this message
                     self.stop_questions = False  # reset
-
-                    missed_message = 'missed:recomm:1'
-
-                    # send the message
-                    self.call_poll_ema(missed_message, all_answers=True)
+                    #dont send message, just keep the missed message up
                 else:
                     # send the blank message after everything for both morning and evening messages-------------
                     _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
@@ -1079,6 +1160,7 @@ class Recommender:
             #evening messages for baseline
             if event_id == 'evening message':
                 self.recomm_start = False  # recomm should not be sent anymore
+                self.stop_questions = False #allow new messages to be sent incase it was never reset
                 MESSAGES_SENT_TODAY = 0  # reset messages to 0
 
                 # baseline likert evening questions
@@ -1093,12 +1175,11 @@ class Recommender:
                     if i == 0:
                         alarmsetting = self.emaTrue
                     message = 'baseline:evening:' + likertlst[i]
-                    answer = self.call_poll_ema(message, all_answers=True,phonealarm=alarmsetting)  # slide bar, 0, or -1.0
+                    answer = self.call_poll_ema(message, all_answers=True,phonealarm=alarmsetting, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
                     # increment count
                     i += 1
 
-                # send the blank message after everything for both morning and evening messages-------------
-                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
+                #blank message handled in scheduled events function 
 
                 log('Baseline Evening Messages Sent')
 
