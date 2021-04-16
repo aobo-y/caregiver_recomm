@@ -8,8 +8,7 @@ class sendemail(object):
         # self.arg = arg
         
     fromaddr = 'M2FED.Monitor@gmail.com'
-    #toaddrs = ['M2FED.Monitor@gmail.com','jjj4se@virginia.edu','ay6gv@virginia.edu','ks5qug@virginia.edu']
-    toaddrs = ['jjj4se@virginia.edu']
+    toaddrs = ['M2FED.Monitor@gmail.com','jjj4se@virginia.edu','ay6gv@virginia.edu','ks5qug@virginia.edu']
     username = 'M2FED.Monitor@gmail.com'
     password = 'moniM2FED'
     server = smtplib.SMTP('smtp.gmail.com:587')

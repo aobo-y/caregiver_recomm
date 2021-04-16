@@ -10,56 +10,26 @@ import re
 import zlib
 import random
 import sqlite3
-import socket
+
 import base64
+
 from .log import log
 
-#get diretory path 
 DIR_PATH = os.path.dirname(__file__)
 
-STOP_POLLING = False #true when need to stop polling
 
-def set_stop_polling(TF):
-    '''
-        Set stop_polling to true or false
-    '''
-    global STOP_POLLING
-    STOP_POLLING = TF
-
-def get_stop_polling():
-    '''
-        Return value of stop_polling
-    '''
-    return STOP_POLLING
-
-def get_ip():
-    '''
-        get ip address and return it
-    '''
-    try: 
-        host_name = socket.gethostname() 
-        host_ip = socket.gethostbyname(host_name) 
-    except: 
-        print("Unable to get Hostname and IP")
-        host_ip = '191.168.0.106'
-    
-    return host_ip
 
 def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
 
-def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[], reactive=0,snd_cnt=1):
-    '''
-    reactive: whether message is proactive (0) or reactive (1). Only recommendations can be 1, other messages are 0
-    snd_cnt: Number of times the same messages is re-tried to send.  First time message is sent = 1. 
 
-    speaker id is always default to 9. If acoustic system is the trigger, that speaker id is used
-    '''
+def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[]):
 
     #default
     message_sent = ''
     choices_sent = ''
     message_name = ''
+
 
     empathid = None
     retrieval_object = ''
@@ -78,13 +48,9 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
 
     # items needed in url
     empathid = '999|' + str(int(time.time() * 100))
-    phone_url = 'http://191.168.0.107:2226' if not test else 'http://127.0.0.1:5000'
-    server_url = 'http://' + get_ip() + '/ema/ema.php'
+    phone_url = 'http://191.168.0.106:2226' if not test else 'http://127.0.0.1:5000'
+    server_url = 'http://191.168.0.107/ema/ema.php'
     androidid = 'db7d3cdb88e1a62a'
-
-    #phone 3 and teamviewer 1668587541
-    #phone_url = 'http://191.168.0.106:2226'
-    #server_url = 'http://191.168.0.107/ema/ema.php'
 
     alarm = alarm
 
@@ -102,16 +68,15 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
         url_dict), safe=':={}/')  # encoding url quotes become %22
     url = phone_url + '/?q=' + q_dict_string
 
-
     # connect to database for logging
     if suid != '995':#do not log blank question (empath is too fast duplicate)
         try:
             db = get_conn()
             cursor = db.cursor()
 
-            insert_query = "INSERT INTO reward_data(speakerID,empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Reactive,SentTimes,ConnectionError,Uploaded) \
-                                  VALUES ('%s','%s','%s','%s','%s', '%s','%s','%s','%s','%s','%s','%s','%s')" % \
-                (str(id),empathid, time_sent, suid, 'NA', -1.0,message_sent,qtype,message_name,reactive,snd_cnt,0,0)
+            insert_query = "INSERT INTO reward_data(empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Uploaded) \
+                                  VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s','%s')" % \
+                (empathid, time_sent, suid, 'NA', -1.0,message_sent,qtype,message_name,0)
             cursor.execute(insert_query)
             db.commit()
         except Exception as err:
@@ -119,25 +84,15 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
             db.rollback()
         finally:
             db.close()
-    
     try:
         _ = urllib.request.urlopen(url)
-    except http.client.BadStatusLine:
-        pass  # EMA return non-TCP response
-    except Exception as e: #for connection error
-        #always log the connection error when sending the message in reward_data table
-        if(('WinError' in str(e))):
-            connectionError_ema(empathid)
-        raise
-    
-    #successful still return 
+    except http.client.BadStatusLine:  # EMA return non-TCP response
+        pass
     return empathid, retrieval_object, qtype
 
 
 def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, freq=5, test_mode=False):
     answer = None #reload question case
-    set_stop_polling(False) #allow polling to start
-
     try:
         db = get_conn()
         cursor = db.cursor()
@@ -147,11 +102,6 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
         start_time = time.time()
 
         while time.time() - start_time < duration:
-
-            #check if we should stop the polling 
-            if get_stop_polling() == True:
-                break
-
             # query = "SELECT answer FROM ema_data where primkey = '" + str(id) + ":" + \
             #     empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
             query = "SELECT answer FROM ema_data where primkey = '" + str(id) + ":" + \
@@ -175,8 +125,8 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
                         answer = answer.split('-')#list of answer choice in list for reward data table
                         answer.sort() #looks better
                         answer = str(([int(x) for x in answer])) #make every element an int but return lst as string
-                    #message received (okay) button or the general button (stressful situation)
-                    if (question_type == 'message received') or (question_type == 'general button'):
+                    #message received (okay) button
+                    if question_type == 'message received':
                         #always send recommendation if you press okay
                         if answer: #if there is an end time
                             answer = 0.0
@@ -212,42 +162,11 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
 
                 break
 
-            #check if we should stop the polling again
-            if get_stop_polling() == True:
-                #reset to allow polling after you break 
-                set_stop_polling(False)
-                break
-            else:
-                time.sleep(freq)
-
+            time.sleep(freq)
     finally:
         # ensure db closed, exception is raised to upper layer to handle
         db.close()
-        #reset to allow polling for anything after you
-        set_stop_polling(False)
     return answer
-
-def connectionError_ema(empathid):
-    '''
-        Called everytime there is a conneciton error
-        Log a connection error of a message
-        Locate row by empathid
-    '''
-    try:
-        db = get_conn()
-        cursor = db.cursor()
-
-        #in reward_data table, set connectionerror column at row to 1
-        update_query = "UPDATE reward_data SET ConnectionError = %s WHERE empathid = %s"
-        
-        cursor.execute(update_query,(1, empathid))
-        db.commit()
-        log('Stored connection error in reward_data table')
-    except Exception as err:
-        log('Failed to store connection error in reward_data table', str(err))
-        db.rollback()
-    finally:
-        db.close()
 
 
 def setup_message(message_name, test=False, caregiver_name='caregiver', care_recipient_name='care recipient',msd_time='0:00am'):
@@ -280,6 +199,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
 
     #pick the prompt for tthe custom message
     suid, vsid, message, retrieval_code, qtype = json_prompts[message_name].values()
+
 
     #Morning Messages Formatting -------------------------------
 
@@ -315,56 +235,26 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             type_title ='Stress Management Tip: ' + bld + recomm_types_dict[r_type] + end_bld + html_newline*2
             #add recommendation type
             message = type_title + message
-            #read image name and style for image from json file
-            image_name,image_style = json_prompts['recomm_images'][r_type] 
-            #make image url with ip 191.168.0.107
-            image_url = 'http://' + get_ip() + '/ema_images/' + image_name
-
+            #read url and style for image from json file
+            image_url,image_style = json_prompts['recomm_images'][r_type] #191.168.0.107
             #add image to message
             message = message + html_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
 
-    #Check if must add Audio addon sequence -------------
-    if ('[AudioAddon: breathing]' in message) or ('[AudioAddon: bodyscan]' in message):
+    #Check for Audio
+    if '[Audio:' in message:
+        #[Audio:audioname.mp3]
         
-        #find which category audio messages to add, get the prompt name
-        audiopromptName = ''
-        if '[AudioAddon: breathing]' in message:
-            audiopromptName = '[AudioAddon: breathing]'
-        elif '[AudioAddon: bodyscan]' in message:
-            audiopromptName = '[AudioAddon: bodyscan]'
+        #find where '[Audio: starts
+        firstIndexAud = message.find('[Audio:')
+        #find where ends
+        endIndexAud = message.find(']')
+        #add 7 to account for "[Audio:
+        audioFileName = message[firstIndexAud+7:endIndexAud]
+        #remove the audioFile name from message
+        message = message.replace('[Audio:'+audioFileName+']',"")
 
-        #take out [AudioAddon:breathing] (prompt name) from message
-        message = message.replace(audiopromptName,'')
-
-        #get the full  prompt
-        audioprompt = json_prompts[audiopromptName]
-
-        #search for the audio file names [Audio: audioname.mp3] -> audioname.mp3
-        audiofiles_lst = re.findall(r'\[Audio: (.*?)\]',audioprompt)
-
-        audioHTML_format = ''
-        counting_files = 1
-        #for each audiofile add html code around it
-        for audiofile in audiofiles_lst:
-            
-            #make audio url
-            audio_url = 'http://' + get_ip() + '/ema_images/' + audiofile
-
-            #find this audio file and format with html
-            audioHTML_format = html_newline + html_newline + cntr + '<audio controls><source src="' + audio_url + '" type="audio/mpeg"></audio>' + end_cntr
-
-            #if not last audio file
-            if counting_files < len(audiofiles_lst):
-                #make a new line for the next audio file
-                audioHTML_format = audioHTML_format + html_newline
-
-            #take out the name of this file and replace with the HTML formatted string
-            audioprompt = audioprompt.replace('[Audio: ' + audiofile + ']',audioHTML_format)
-
-            counting_files+=1
-        
-        #once breathingprompt is formatted with html, add it to the original message
-        message = message + html_newline + audioprompt
+        #add the audiofile at the end of the message
+        message = message + html_newline + cntr + '<audio controls><source src="http://191.168.0.107/ema_images/' + audioFileName + '" type="audio/mpeg"></audio>' + end_cntr
 
 
     #check in messages
@@ -419,18 +309,13 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             db.rollback()
         finally:
             db.close()
-    
-    #dynamically change likert scale
-    if ('[Likert]' in message) and (qtype == 'slide bar'):
-        #change the labels of likert scale dynamically
-        message = likert_dynamic_answers(message,suid)
 
     #if there is a next line in message
     if '\n' in message:
         message = message.replace('\n',html_newline)
 
     #for STORING in reward data
-    stored_message_sent = message.replace(html_newline,'').replace(bld,'').replace(end_bld,'').replace(cntr,'').replace(end_cntr,'') #we dont want <br /> or bold
+    stored_message_sent = message.replace(html_newline,'').replace(bld,'').replace(end_bld,' ') #we dont want <br /> or bold
     stored_message_sent = pymysql.escape_string(stored_message_sent) #must use escape for the \' in message
     stored_message_name = message_name
 
@@ -454,53 +339,3 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
         db.close()
     # returns suid, retrieval code, and question type
     return suid, retrieval_code, qtype, stored_message_sent, stored_message_name
-
-
-def likert_dynamic_answers(msg,suid):
-    '''
-        Dynamically change the labels on a slide bar (Likert Scale)
-
-        Message looks like this:
-        message prompt [Likert] not helpful; helpful 
-
-        Turn into:
-        '1 0<br />not helpful<br />\n2 10<br />helpful'
-
-        return message
-    '''
-    message = msg
-
-    # change the answer choices
-    try:
-
-        #get the answer choices: not helpful; helpful
-        answer_choices = msg.split('[Likert]')[1]
-
-        #get the message and return it
-        message = msg.split('[Likert]')[0]
-
-        #get individual labels: not helpful and helpful
-        first_label = answer_choices.strip().split(';')[0]
-        second_label = answer_choices.strip().split(';')[1]
-        first_label = first_label.strip()
-        second_label = second_label.strip()
-
-        #correct format
-        answer_choices = '1 0<br />'+first_label+'<br />\n2 10<br />'+second_label
-
-        # to change options choices must incode in binary
-        binary_choices = answer_choices.replace("\n", os.linesep).encode("ascii")
-
-        db = get_conn()
-        cursor = db.cursor()
-        update_query = "UPDATE ema_settings SET value = %s WHERE suid = %s AND object = %s AND name like %s"
-        cursor.execute(update_query, (binary_choices, str(suid),'6801', 'options')) #vsid = 6801 <- must
-
-        db.commit()
-    except Exception as err:
-        log('Failed to dynamically change likert scale labels', err)
-        db.rollback()
-    finally:
-        db.close()
-        return message
-
