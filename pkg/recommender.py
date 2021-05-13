@@ -30,7 +30,7 @@ PROACTIVE_ACTION_INDEX = [n for n,i in enumerate(ACTIONS) if ('breathing' in i) 
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
 COOLDOWN_TIME = 2400 #40 min
-BASELINE_TIME = 2628000 #1 month
+BASELINE_TIME = 1814400 #3 weeks
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
@@ -252,7 +252,7 @@ class Recommender:
                             #reactive. Will not actually be sent if it doesnt satisfy normal requirements such as cool down (EXCEPT MAX MESSAGES requirement)
                             self.dispatch(DEFAULT_SPEAKERID, evt, reactive=1,requestButton=True)
             except Exception as err:
-                log('start_recomm_button() error', err)
+                log('start_recomm_button() error', str(err))
                 self.email_alerts('Recommendation request button', str(err), 'Failure in start_recomm_button function',
                               'Possible sources of error: threads overlapping',
                               urgent=False)
@@ -385,7 +385,7 @@ class Recommender:
                 self.stats.update(action_idx)
 
         except Exception as err:
-            log('Event processing error:', err)
+            log('Event processing error:', str(err))
             self.email_alerts('Recommendation Messages', str(err), 'Failure in send_action or get_reward functions',
                               'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
                               urgent=False)
@@ -538,7 +538,7 @@ class Recommender:
             cursor.execute(insert_query)
             db.commit()
         except Exception as err:
-            log('Record recommendation data error:', err)
+            log('Record recommendation data error:', str(err))
             db.rollback()
             self.email_alerts('EMA Storing Data', str(err),
                               'Error occured in recording data in the EMA Storing Data table',
@@ -882,7 +882,7 @@ class Recommender:
                     log(f'Scheduled event sent: {event_id}', timer=self.timer)
 
             except Exception as error:
-                log('Send scheduled action error:', error, timer=self.timer)
+                log('Send scheduled action error:', str(error), timer=self.timer)
                 self.email_alerts('Scheduled Events', str(error),
                                   'Error occured in the the following scheduled event: ' + event_id,
                                   'Possible sources of error: start/end time issue, connection, storing/reading data in EMA tables, reading json file, overlap issue',
@@ -976,7 +976,7 @@ class Recommender:
                                   freq=(poll_freq if not self.test_mode else 0.02), test_mode=self.test_mode)
             
             except Exception as e:
-                log('Call_ema or Poll_ema Error', e)
+                log('Call_ema or Poll_ema Error', str(e))
                 if ('WinError' in str(e)) and (exception_count == 0):
                     #try again after connection error only once
                     exception_count+=1
@@ -1073,6 +1073,7 @@ class Recommender:
         msd_setup_lst = [msd_suid, msd_retrieval_object, msd_qtype, msd_stored_msg_sent, msd_stored_msg_name]
 
         msd_req_id = None
+        missed_answer = None
 
         #if first time sent, wait 10 min
         if msd_msg_sent == 0:
@@ -1087,7 +1088,7 @@ class Recommender:
                                 duration=(msd_refresh_poll_time if not self.test_mode else 0.1),
                                 freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
         except Exception as e:
-            log('send_missed_msg', e)
+            log('send_missed_msg', str(e))
             self.email_alerts('send_missed_msg', str(e),'Failure in send_missed_msg function',
                                 'Connection Error, setup_message, call_ema, or poll_ema',
                                 urgent=False)
@@ -1150,7 +1151,7 @@ class Recommender:
             log('Baseline Recommendation Messages Sent')
 
         except Exception as err:
-            log('Baseline Recommendation Confirmation Error', err)
+            log('Baseline Recommendation Confirmation Error', str(err))
             self.email_alerts('Baseline Recommendation', str(err), 'Failure in baseline_recomm function',
                               'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
                               urgent=False)
@@ -1212,7 +1213,7 @@ class Recommender:
                 log('Baseline Evening Messages Sent')
 
         except Exception as err:
-            log('Baseline Scheduled Events Error', err)
+            log('Baseline Scheduled Events Error', str(err))
             self.email_alerts('Baseline Scheduled Events', str(err), 'Failure in baseline_schedule_evt function',
                               'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
                               urgent=False)
@@ -1251,7 +1252,7 @@ class Recommender:
                     #button handeled once you call dispatch
 
             except Exception as err:
-                log('Baseline Random Recommendation Error', err)
+                log('Baseline Random Recommendation Error', str(err))
                 self.email_alerts('Baseline random Recommendations', str(err), 'Failure in rand_recomm function',
                                   'Possible sources of error: dispatch function does not have enough arguments',
                                   urgent=False)
@@ -1316,11 +1317,15 @@ class Recommender:
         #After baseline period, check if a proactive recommendation should be sent
         while True:
             try:
+    
+                #try to send positive affirmation if not sent yet today
+                self.positive_affirmation()
+
                 #if we dont have model yet, just send random messages
                 if self.proactive_model == None: 
                     log('Proactive Model not yet generated. Randomly sending proactive messages')
-                    # sleep between 5 min to 7 hours till next artificial recommendation
-                    sleepfor = random.randint(360, 25200)
+                    # sleep between 5 min to 4 hours till next artificial recommendation
+                    sleepfor = random.randint(360, 14400)
                     log('Next random proactive recommendation in', sleepfor // 60, 'minutes')
                     time.sleep(sleepfor)
                     #allow for proactive recomm to be sent 
@@ -1345,9 +1350,6 @@ class Recommender:
                         #not reactive. proactive
                         self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0) 
                         #button handled once you call dispatch
-                #check if positive affirmation should be sent and send it
-                else:
-                    self.positive_affirmation()
 
                 #sleep till next hour. Check every hour of the day
                 check_every = 3600
@@ -1355,7 +1357,7 @@ class Recommender:
                 time.sleep(check_every)
 
             except Exception as err:
-                log('Proactive Recommendation Error', err)
+                log('Proactive Recommendation Error', str(err))
                 self.email_alerts('Proactive Recommendations', str(err), 'Failure in proactive_recomm function',
                                   'Possible sources of error: model, division of day',
                                   urgent=False)
@@ -1371,36 +1373,50 @@ class Recommender:
         #randomly choose if message should be sent
         send_pos_affirmation = [True, False]
         #likelyhood 
-        send_prob = [.4,.6]
+        send_prob = [.6,.4]
         #randomly pick
         rand_pick = (random.choices(send_pos_affirmation,send_prob))[0] #bc returns val in list
+    
+        try:
+            if rand_pick:
+                #pick amount of time to sleep 0 to 2 hours  
+                sleepfor = random.randint(0, 7200)
+                log('Positive affirmation is planned to be sent in', sleepfor // 60, 'minutes')
+                time.sleep(sleepfor)
 
-        if rand_pick:
-            print(rand_pick)
-            #pick amount of time to sleep 0 to 30 min  
-            sleepfor = random.randint(0, 1800)
-            log('Positive affirmation is planned to be sent in', sleepfor // 60, 'minutes')
-            time.sleep(sleepfor)
+                #no other aff msgs sent today, correct period, and no other messages in progress
+                if (self.num_sent_affirmation_msgs == 0) and self.recomm_start and (not self.recomm_in_progress):
+                    
+                    #recommendation can over ride this positve affirmation message
+                    self.need_button_on = False #button must be off now
+                    #button polling is stopped from call_poll_ema function
 
-            #no other aff msgs sent today, correct period, and no other messages in progress
-            if (self.num_sent_affirmation_msgs == 0) and self.recomm_start and (not self.recomm_in_progress):
+                    #choose message
+                    message_number = random.randint(1, 72)
+                    message = 'daytime:affirmation:'+str(message_number)
 
-                #choose message
-                message_number = random.randint(1, 11)
-                message = 'daytime:affirmation:'+str(message_number)
+                    self.num_sent_affirmation_msgs+=1 #increase count
+                    log('Sending positive affirmation message')
 
-                self.num_sent_affirmation_msgs+=1 #increase count
-                log('Sending positive affirmation message')
+                    #treat as request button to avoid sending missed message, sent only once. Poll time is 20 minutes
+                    affirmation_answer = self.call_poll_ema(message, all_answers=True,ifmissed='missed:recomm:1',phonealarm=self.emaTrue,request_button=True,poll_time=1200)  
 
-                #treat as request button to avoid sending missed missage, sent only once. Poll time is 20 minutes
-                affirmation_answer = self.call_poll_ema(message, all_answers=True,ifmissed='missed:recomm:1',phonealarm=self.emaTrue,request_button=True,poll_time=1200)  
-
-                if self.recomm_start and (not self.recomm_in_progress):
-                    #send blank message
-                    _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
+                    if self.recomm_start and (not self.recomm_in_progress):
+                        #send blank message
+                        _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
+                        self.stop_questions = False  # reset anyways (will never be set to true because message does not have missed message)
+                        self.need_button_on = True #allow button to be turend on 
+                        #no need to reset recomm_in_progress bc this is not a recommendation
+                else:
+                    log('Positive affirmation chosen but not sent. Requirements not met.')
             else:
-                log('Positive affirmation not sent. Requirements not met.')
-
+                log('Positive affirmation was not chosen to be sent')
+        except Exception as err:
+            log('Positive Affirmation Error', str(err))
+            self.email_alerts('Positive Affirmation Message', str(err), 'Failure in the positive_affirmation function',
+                                  'Possible sources of error: overlap with button or other message',
+                                  urgent=False)
+        
 
     def extract_deploy_info(self):
         '''
@@ -1481,7 +1497,7 @@ class Recommender:
             log('InformationDeployment.db time read successfully')
 
         except Exception as e:
-            log('Read SQLite DB error:', e, timer=self.timer)
+            log('Read SQLite DB error:', str(e), timer=self.timer)
             self.email_alerts('DeploymentInformation.db', str(e),
                               'Extraction of Deployment Information Failure: Start/End time, Names, or Homeid',
                               'DeploymentInformation.db path or contents should be investigated', urgent=True)
@@ -1566,7 +1582,7 @@ class Recommender:
                     log(f'recomm_saved_memory table start date set')
 
             except Exception as err:
-                log('savedDeployments Error', err)
+                log('savedDeployments Error', str(err))
                 self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, select query',
                                   'Possible sources of error: no row exists, format issue, BASELINE_TIME, comparing issue, prev ev/morn time incorrect format, prev max messages not int',
                                   urgent=True)
@@ -1601,7 +1617,7 @@ class Recommender:
                 log(f'recomm_saved_memory table updated. Baseline period remaining: {baseline_time_left} seconds')
 
             except Exception as err:
-                log('savedDeployments Error', err)
+                log('savedDeployments Error', str(err))
                 self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, update query',
                                   'Possible sources of error: no row exists, format issue, baseline_time_left',
                                   urgent=True)
@@ -1656,7 +1672,7 @@ class Recommender:
                 log('Email alert stored to send later')
 
         except Exception as e:
-            log('Email Alert error:', e)
+            log('Email Alert error:', str(e))
 
         return
 
