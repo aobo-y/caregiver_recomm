@@ -276,12 +276,23 @@ class Recommender:
         if not isinstance(evt, np.ndarray):
             evt = np.array(evt)
 
-        # safety in case of numpy array or float
+        # safety in case of numpy array or float or str
         if type(speaker_id) is not int:
-            self.email_alerts('Speaker ID', 'TypeError', 'Speaker id is the wrong type (FATAL)',
-                              'Make sure acoustic system passes correct speaker id type: int',
+            try:
+                speaker_id = int(speaker_id)
+            except Exception as err:
+                log('Speaker ID type error in dispatch function:', str(err))
+                self.email_alerts('Speaker ID', str(err), 'Speaker id is the wrong type (FATAL)',
+                              'Make sure acoustic system passes correct speaker id type: positive int',
                               urgent=True)
-            raise TypeError('Speaker id must be integer, received: ' + speaker_id)
+                return 
+        #speaker id cant have a negative sign
+        if speaker_id <= -1:
+            log('Speaker ID value error in dispatch function')
+            self.email_alerts('Speaker ID value error in dispatch function', 'Invalid Speaker ID value', 'Speaker id is a negative value (FATAL)',
+                              'Make sure acoustic system passes correct speaker id type: positive int',
+                              urgent=True)
+            return
 
         # system must be initialized
         if not self.sched_initialized:
