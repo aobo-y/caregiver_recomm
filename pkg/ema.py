@@ -115,7 +115,7 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
             cursor.execute(insert_query)
             db.commit()
         except Exception as err:
-            log('Failed to log ema request:', err)
+            log('Failed to log ema request:', str(err))
             db.rollback()
         finally:
             db.close()
@@ -207,7 +207,7 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
                     )
                     db.commit()
                 except Exception as err:
-                    log('Failed to update logged ema request:', err)
+                    log('Failed to update logged ema request:', str(err))
                     db.rollback()
 
                 break
@@ -415,7 +415,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
 
             db.commit()
         except Exception as err:
-            log('Failed to update logged ema request:', err)
+            log('Failed to update logged ema request:', str(err))
             db.rollback()
         finally:
             db.close()
@@ -448,7 +448,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
 
         db.commit()
     except Exception as err:
-        log('Failed to update logged ema request:', err)
+        log('Failed to update logged ema request:', str(err))
         db.rollback()
     finally:
         db.close()
@@ -498,7 +498,7 @@ def likert_dynamic_answers(msg,suid):
 
         db.commit()
     except Exception as err:
-        log('Failed to dynamically change likert scale labels', err)
+        log('Failed to dynamically change likert scale labels', str(err))
         db.rollback()
     finally:
         db.close()
