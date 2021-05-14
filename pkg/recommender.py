@@ -951,7 +951,6 @@ class Recommender:
         #stop polling will be reset to False when exiting poll_ema and entering poll_ema (if in use)
         _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode) #just reset the screen with blank, too quick to see
 
-
         #get the time of the first message sent only once
         missed_time = self.get_time()
 
