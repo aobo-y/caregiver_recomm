@@ -119,16 +119,17 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
             db.rollback()
         finally:
             db.close()
-    
+            
     try:
         _ = urllib.request.urlopen(url)
     except http.client.BadStatusLine:
         pass  # EMA return non-TCP response
     except Exception as e: #for connection error
-        #always log the connection error when sending the message in reward_data table
-        if(('WinError' in str(e))):
+        #always log the connection error when sending the message in reward_data table, except for blank message
+        if ('WinError' in str(e)) and (suid != '995'):
             connectionError_ema(empathid)
-        raise
+        if (suid != '995'):  #ignore if blank message
+            raise #use as a notification to try again in call_poll_ema() and send an email
     
     #successful still return 
     return empathid, retrieval_object, qtype
