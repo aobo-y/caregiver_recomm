@@ -181,7 +181,7 @@ class Recommender:
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
             self.extract_deploy_info()
-                
+                        
         if (not test) or (schedule_evt_test_config != None):
             # initialize _schedule_evt()
             schedule_thread = Thread(target=self._schedule_evt)
@@ -1134,12 +1134,12 @@ class Recommender:
             self.need_button_on = False #button must be off now
             self.last_action_time = self.timer.now() #start cooldown
 
-            # # baseline detection confirm
-            message = 'baseline:recomm:binaryconfirm:1'
-            answer_bank = [1.0, 0.0, -1.0]
-            # ask if feeling angy yes/no, first question alarm on
-            baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
-                                                     phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
+            # # # baseline detection confirm
+            # message = 'baseline:recomm:binaryconfirm:1'
+            # answer_bank = [1.0, 0.0, -1.0]
+            # # ask if feeling angy yes/no, first question alarm on
+            # baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
+            #                                          phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
 
             message = 'baseline:recomm:likertconfirm:1'
             likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
