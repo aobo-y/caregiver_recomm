@@ -1134,12 +1134,12 @@ class Recommender:
             self.need_button_on = False #button must be off now
             self.last_action_time = self.timer.now() #start cooldown
 
-            # # baseline detection confirm
-            message = 'baseline:recomm:binaryconfirm:1'
-            answer_bank = [1.0, 0.0, -1.0]
-            # ask if feeling angy yes/no, first question alarm on
-            baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
-                                                     phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
+            # # # baseline detection confirm
+            # message = 'baseline:recomm:binaryconfirm:1'
+            # answer_bank = [1.0, 0.0, -1.0]
+            # # ask if feeling angy yes/no, first question alarm on
+            # baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
+            #                                          phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
 
             message = 'baseline:recomm:likertconfirm:1'
             likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,

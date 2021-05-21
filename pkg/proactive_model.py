@@ -97,12 +97,12 @@ def generate_proactive_models():
             df = df.loc[df['TimeSent'] >= startdate] 
 
             #get the time and response of the baseline check in 
-            baseline_actions_timesent = df.loc[df['QuestionName']=='baseline:recomm:binaryconfirm:1','TimeSent'].tolist()
-            baseline_actions_reponse = df.loc[df['QuestionName']=='baseline:recomm:binaryconfirm:1','Response'].tolist()
+            baseline_actions_timesent = df.loc[df['QuestionName']=='baseline:recomm:likertconfirm:1','TimeSent'].tolist()
+            baseline_actions_reponse = df.loc[df['QuestionName']=='baseline:recomm:likertconfirm:1','Response'].tolist()
 
-            #one normal period start using time of recommendation and their reward
-            post_recomm_time = df.loc[df['QuestionName']=='daytime:postrecomm:implement:1','TimeSent'].tolist()
-            post_recomm_reward = df.loc[df['QuestionName']=='daytime:postrecomm:implement:1','Response'].tolist()
+            #when normal period start using time of if the recommendation was helpful
+            post_recomm_time = df.loc[df['QuestionName']=='daytime:postrecomm:helpfulyes:1','TimeSent'].tolist()
+            post_recomm_reward = df.loc[df['QuestionName']=='daytime:postrecomm:helpfulyes:1','Response'].tolist()
 
             #join the lists
             timessent_lst = baseline_actions_timesent + post_recomm_time
@@ -111,7 +111,7 @@ def generate_proactive_models():
             fnl_bline_act_timesent_lst = []
             fnl_bline_act_reponse_lst = []
             for i in range(0,len(timessent_lst)):
-                #change reponses to in not angry: 0, angry: 1, -1.0
+                #change reponses to in not angry: 0.0 to angry: 10.0, -1.0
                 angry_helpful_lst[i] = int(float(angry_helpful_lst[i]))
 
                 #if no response remove
