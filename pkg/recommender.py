@@ -181,7 +181,7 @@ class Recommender:
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
             self.extract_deploy_info()
-                
+                        
         if (not test) or (schedule_evt_test_config != None):
             # initialize _schedule_evt()
             schedule_thread = Thread(target=self._schedule_evt)

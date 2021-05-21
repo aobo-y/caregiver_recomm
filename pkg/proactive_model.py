@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pymysql
 from .log import log
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def get_conn():
     return pymysql.connect('localhost', 'root', '', 'ema')
@@ -103,6 +103,9 @@ def generate_proactive_models():
             #when normal period start using time of if the recommendation was helpful
             post_recomm_time = df.loc[df['QuestionName']=='daytime:postrecomm:helpfulyes:1','TimeSent'].tolist()
             post_recomm_reward = df.loc[df['QuestionName']=='daytime:postrecomm:helpfulyes:1','Response'].tolist()
+            #subtract 30 minutes from post_recomm_time because a recommendation takes at least 30 minutes pause
+            for time_idex in range(0,len(post_recomm_time)):
+                post_recomm_time[time_idex] = post_recomm_time[time_idex] - timedelta(minutes=30)
 
             #join the lists
             timessent_lst = baseline_actions_timesent + post_recomm_time
@@ -176,9 +179,9 @@ def get_proactive_prediction(hour,model):
         #pass hour to model
         Y_pred = model.predict(poly_reg.fit_transform([[hour]]))
 
-        #if prob >.5 then yes send
+        #if angry level >= 4 then yes send
         Y_pred = float(Y_pred[0])
-        if Y_pred >.5:
+        if Y_pred >=4:
             send_proact_recomm = 1
         else:
             send_proact_recomm = 0
@@ -192,10 +195,16 @@ def get_proactive_prediction(hour,model):
         #if we get to the end return False None or True 0/1
         return success,send_proact_recomm
 
+#my_model = generate_proactive_models()
+#print(my_model)
+#print(get_proactive_prediction(17,my_model))
 
-# my_model = generate_proactive_models()
-# print(my_model)
-# print(get_proactive_prediction(12,my_model))
+#plot
+# mymodel = np.poly1d(np.polyfit(fnl_bline_act_timesent_lst, fnl_bline_act_reponse_lst, 4))
+# myline = np.linspace(0, 23, 100)
+# plt.scatter(fnl_bline_act_timesent_lst,fnl_bline_act_reponse_lst)
+# plt.plot(myline,mymodel(myline))
+# plt.show()
 
 # fnl_bline_act_reponse_lst = [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 0, 0, 0, 0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 # fnl_bline_act_timesent_lst = [2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7]
