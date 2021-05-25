@@ -12,7 +12,7 @@ def main(server_config=None, mock=False, mode='default'):
         mock=mock, server_config=server_config, mode=mode)
 
     while True:
-        time.sleep(160)
+        #time.sleep(160)
         evt = np.random.randn(D_EVT)
         recommender.dispatch(1, evt)
         time.sleep(5)
