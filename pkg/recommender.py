@@ -181,7 +181,7 @@ class Recommender:
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
             self.extract_deploy_info()
-                        
+                      
         if (not test) or (schedule_evt_test_config != None):
             # initialize _schedule_evt()
             schedule_thread = Thread(target=self._schedule_evt)
@@ -1028,7 +1028,7 @@ class Recommender:
                 refresh_poll_time = 600  # 10min
             elif send_count == 2:
                 refresh_poll_time = 1200  # 20min
-        
+       
             #once sent x times and still no answer and msd msg has not been sent before, send missed message
             if (send_count == remind_amt) and (missed_msg_sent < 2):
 

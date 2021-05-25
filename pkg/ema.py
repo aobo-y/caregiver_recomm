@@ -41,7 +41,7 @@ def get_ip():
         host_ip = socket.gethostbyname(host_name) 
     except: 
         print("Unable to get Hostname and IP")
-        host_ip = '191.168.0.106'
+        host_ip = '191.168.0.107'
     
     return host_ip
 
@@ -78,7 +78,7 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
 
     # items needed in url
     empathid = '999|' + str(int(time.time() * 100))
-    phone_url = 'http://191.168.0.107:2226' if not test else 'http://127.0.0.1:5000'
+    phone_url = 'http://191.168.0.106:2226' if not test else 'http://127.0.0.1:5000'
     server_url = 'http://' + get_ip() + '/ema/ema.php'
     androidid = 'db7d3cdb88e1a62a'
 
