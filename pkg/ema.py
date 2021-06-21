@@ -1,4 +1,5 @@
 import pymysql
+from pymysql.converters import escape_string
 import time
 import datetime
 import urllib
@@ -46,7 +47,7 @@ def get_ip():
     return host_ip
 
 def get_conn():
-    return pymysql.connect('localhost', 'root', '', 'ema')
+    return pymysql.connect(host='localhost', user='root', password='', db='ema')
 
 def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[], reactive=0,snd_cnt=1):
     '''
@@ -432,7 +433,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
 
     #for STORING in reward data
     stored_message_sent = message.replace(html_newline,'').replace(bld,'').replace(end_bld,'').replace(cntr,'').replace(end_cntr,'') #we dont want <br /> or bold
-    stored_message_sent = pymysql.escape_string(stored_message_sent) #must use escape for the \' in message
+    stored_message_sent = escape_string(stored_message_sent) #must use escape for the \' in message
     stored_message_name = message_name
 
     #converting prompt to binary
