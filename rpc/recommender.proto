@@ -1,0 +1,13 @@
+syntax="proto3";
+
+service Recommender {
+    rpc Dispatch(DispatchRequest) returns (Empty) {}
+};
+
+message DispatchRequest {
+    string speaker_id = 1;
+    repeated float evt = 2;
+};
+
+message Empty {
+};
