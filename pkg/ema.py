@@ -429,6 +429,8 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
 
     #textbox messgaes that need only numbers. Make the textbox smaller and only allow numbers. (Evening messages in baseline and regular period). 
     if ('textbox:interactions' in message_name) or  ('textboxinteractions' in message_name):
+        #add breakline to allow next button to show
+        message+= html_newline*2
         # close the div and place script. Use onload since this statement occurs before the textarea. Use jquery validate plugin for numerical validation. Found out EMA is using the textarea tag by adding <textarea> without closing tag to make code spill out
         message+= '</div> <script> window.onload = function(){ var mytextarea = document.getElementsByTagName("textarea")[0]; mytextarea.style.width = "100px"; mytextarea.style.height = "auto"; mytextarea.rows = 1; mytextarea.placeholder = "0"; mytextarea.setAttribute("data-rule-number", "true");}; </script> <div> '
 
