@@ -15,7 +15,7 @@ import socket
 import base64
 from .log import log
 
-#get diretory path 
+#get diretory path
 DIR_PATH = os.path.dirname(__file__)
 
 STOP_POLLING = False #true when need to stop polling
@@ -37,13 +37,13 @@ def get_ip():
     '''
         get ip address and return it
     '''
-    try: 
-        host_name = socket.gethostname() 
-        host_ip = socket.gethostbyname(host_name) 
-    except: 
+    try:
+        host_name = socket.gethostname()
+        host_ip = socket.gethostbyname(host_name)
+    except:
         print("Unable to get Hostname and IP")
         host_ip = '191.168.0.107'
-    
+
     return host_ip
 
 def get_conn():
@@ -52,7 +52,7 @@ def get_conn():
 def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[], reactive=0,snd_cnt=1):
     '''
     reactive: whether message is proactive (0) or reactive (1). Only recommendations can be 1, other messages are 0
-    snd_cnt: Number of times the same messages is re-tried to send.  First time message is sent = 1. 
+    snd_cnt: Number of times the same messages is re-tried to send.  First time message is sent = 1.
 
     speaker id is always default to 9. If acoustic system is the trigger, that speaker id is used
     '''
@@ -112,7 +112,7 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
 
             insert_query = "INSERT INTO reward_data(speakerID,empathid,TimeSent,suid,TimeReceived,Response,Question,QuestionType,QuestionName,Reactive,SentTimes,ConnectionError,Uploaded) \
                                   VALUES ('%s','%s','%s','%s','%s', '%s','%s','%s','%s','%s','%s','%s','%s')" % \
-                (str(id),empathid, time_sent, suid, 'NA', -1.0,message_sent,qtype,message_name,reactive,snd_cnt,0,0)
+                           (str(id),empathid, time_sent, suid, 'NA', -1.0,message_sent,qtype,message_name,reactive,snd_cnt,0,0)
             cursor.execute(insert_query)
             db.commit()
         except Exception as err:
@@ -120,7 +120,7 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
             db.rollback()
         finally:
             db.close()
-            
+
     try:
         _ = urllib.request.urlopen(url)
     except http.client.BadStatusLine:
@@ -131,8 +131,8 @@ def call_ema(id, suid='', message='', alarm='false', test=False, already_setup=[
             connectionError_ema(empathid)
         if (suid != '995'):  #ignore if blank message
             raise #use as a notification to try again in call_poll_ema() and send an email
-    
-    #successful still return 
+
+    #successful still return
     return empathid, retrieval_object, qtype
 
 
@@ -150,14 +150,14 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
 
         while time.time() - start_time < duration:
 
-            #check if we should stop the polling 
+            #check if we should stop the polling
             if get_stop_polling() == True:
                 break
 
             # query = "SELECT answer FROM ema_data where primkey = '" + str(id) + ":" + \
             #     empathid + "' AND variablename = 'R" + var_name_code + "Q01'"
             query = "SELECT answer FROM ema_data where primkey = '" + str(id) + ":" + \
-                 empathid + "' AND variablename = '" + retrieve + "'"
+                    empathid + "' AND variablename = '" + retrieve + "'"
             data = cursor.execute(query)
 
             if data:
@@ -216,7 +216,7 @@ def poll_ema(id, empathid, action_idx, retrieve, question_type, duration=300, fr
 
             #check if we should stop the polling again
             if get_stop_polling() == True:
-                #reset to allow polling after you break 
+                #reset to allow polling after you break
                 set_stop_polling(False)
                 break
             else:
@@ -241,7 +241,7 @@ def connectionError_ema(empathid):
 
         #in reward_data table, set connectionerror column at row to 1
         update_query = "UPDATE reward_data SET ConnectionError = %s WHERE empathid = %s"
-        
+
         cursor.execute(update_query,(1, empathid))
         db.commit()
         log('Stored connection error in reward_data table')
@@ -318,7 +318,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             #add recommendation type
             message = type_title + message
             #read image name and style for image from json file
-            image_name,image_style = json_prompts['recomm_images'][r_type] 
+            image_name,image_style = json_prompts['recomm_images'][r_type]
             #make image url with ip 191.168.0.107
             image_url = 'http://' + get_ip() + '/ema_images/' + image_name
 
@@ -327,7 +327,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
 
     #Check if must add Audio addon sequence -------------
     if ('[AudioAddon: breathing]' in message) or ('[AudioAddon: bodyscan]' in message):
-        
+
         #find which category audio messages to add, get the prompt name
         audiopromptName = ''
         if '[AudioAddon: breathing]' in message:
@@ -348,7 +348,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
         counting_files = 1
         #for each audiofile add html code around it
         for audiofile in audiofiles_lst:
-            
+
             #make audio url
             audio_url = 'http://' + get_ip() + '/ema_images/' + audiofile
 
@@ -364,7 +364,7 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             audioprompt = audioprompt.replace('[Audio: ' + audiofile + ']',audioHTML_format)
 
             counting_files+=1
-        
+
         #once breathingprompt is formatted with html, add it to the original message
         message = message + html_newline + audioprompt
 
@@ -421,11 +421,18 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             db.rollback()
         finally:
             db.close()
-    
+
     #dynamically change likert scale
     if ('[Likert]' in message) and (qtype == 'slide bar'):
         #change the labels of likert scale dynamically
         message = likert_dynamic_answers(message,suid)
+
+    #textbox messgaes that need only numbers. Make the textbox smaller and only allow numbers. (Evening messages in baseline and regular period).
+    if ('textbox:interactions' in message_name) or  ('textboxinteractions' in message_name):
+        #add breakline to allow next button to show
+        message+= html_newline*2
+        # close the div and place script. Use onload since this statement occurs before the textarea. Use jquery validate plugin for numerical validation. Found out EMA is using the textarea tag by adding <textarea> without closing tag to make code spill out
+        message+= '</div> <script> window.onload = function(){ var mytextarea = document.getElementsByTagName("textarea")[0]; mytextarea.style.width = "100px"; mytextarea.style.height = "auto"; mytextarea.rows = 1; mytextarea.placeholder = "0"; mytextarea.setAttribute("data-rule-number", "true");}; </script> <div> '
 
     #if there is a next line in message
     if '\n' in message:
@@ -463,7 +470,7 @@ def likert_dynamic_answers(msg,suid):
         Dynamically change the labels on a slide bar (Likert Scale)
 
         Message looks like this:
-        message prompt [Likert] not helpful; helpful 
+        message prompt [Likert] not helpful; helpful
 
         Turn into:
         '1 0<br />not helpful<br />\n2 10<br />helpful'
