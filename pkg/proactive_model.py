@@ -9,11 +9,12 @@ import seaborn as sn
 import matplotlib.pyplot as plt
 import numpy as np
 import pymysql
+import random
 from .log import log
 from datetime import datetime, timedelta
 
 def get_conn():
-    return pymysql.connect('localhost', 'root', '', 'ema')
+    return pymysql.connect(host='localhost', user='root', password='', db='ema')
 
 def read_data():
     '''
@@ -185,6 +186,10 @@ def get_proactive_prediction(hour,model):
             send_proact_recomm = 1
         else:
             send_proact_recomm = 0
+
+        #if don't sent, randomly check if recomm should be sent .5 prob
+        if send_proact_recomm == 0:
+            send_proact_recomm = random.randint(0,1)
 
         log('Proactive model predicts:',send_proact_recomm) 
         
