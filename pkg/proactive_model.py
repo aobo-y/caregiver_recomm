@@ -176,7 +176,8 @@ def get_proactive_prediction(hour,model):
 
         #initilaize polynomial regression for transforming hour
         poly_reg = PolynomialFeatures(degree=4)
-       
+
+        log('Proactive model predicting...')
         #pass hour to model
         Y_pred = model.predict(poly_reg.fit_transform([[hour]]))
 
@@ -189,6 +190,7 @@ def get_proactive_prediction(hour,model):
 
         #if don't sent, randomly check if recomm should be sent .5 prob
         if send_proact_recomm == 0:
+            log('Proactive model predicted 0 thus randomly choosing...')
             send_proact_recomm = random.randint(0,1)
 
         log('Proactive model predicts:',send_proact_recomm) 
