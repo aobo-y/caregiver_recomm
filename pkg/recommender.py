@@ -1360,6 +1360,8 @@ class Recommender:
                         #not reactive. proactive
                         self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0) 
                         #button handled once you call dispatch
+                        
+                send_proactive_answer = False #reset
 
                 #sleep till next hour. Check every hour of the day
                 check_every = 3600
