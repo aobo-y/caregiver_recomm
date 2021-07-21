@@ -36,7 +36,7 @@ DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
 DEFAULT_SPEAKERID = 9 #when not triggered by acoustic
 #save triggers list (used in ema storing data table)
-TRIGGERS_DICT = {0:'acoustic', 1:'recomm request button', 2:'baseline random', 3: 'proactive model'}
+TRIGGERS_DICT = {0:'acoustic', 1:'recomm request button', 2:'baseline random', 3: 'proactive model', 4:'random'}
 DIR_PATH = os.path.dirname(__file__)
 
 
@@ -272,7 +272,7 @@ class Recommender:
             reactive: 1, if triggered by acoustic system (reactive)
             reactive: 0, if proactive recommendations
 
-            trigger (origin of dispatch): acoustic, recomm request button, baseline random, proactive
+            trigger (origin of dispatch): acoustic, recomm request button, baseline random, proactive model, random
                 default is acoustic system
         '''
 
@@ -1353,6 +1353,7 @@ class Recommender:
             log('Unable to generate proactive model in proactive_recomm()',str(err))
 
         send_proactive_answer = False #when true allow to send proactive message
+        current_trigger = TRIGGERS_DICT[4] #default: random
 
         #After baseline period, check if a proactive recommendation should be sent
         while True:
@@ -1370,6 +1371,8 @@ class Recommender:
                     time.sleep(sleepfor)
                     #allow for proactive recomm to be sent 
                     send_proactive_answer = True
+                    #set trigger to random
+                    current_trigger = TRIGGERS_DICT[4]
                 #usual case
                 else:
                     #check if model says to send recommendation during this period
@@ -1380,6 +1383,20 @@ class Recommender:
                     if success and (send_proactive == 1):
                         #allow to be sent
                         send_proactive_answer = True
+                        #set trigger to proactive model
+                        current_trigger = TRIGGERS_DICT[3]
+                    #if successfull got answer and answer is 0 or None (getting prediction was a failure)
+                    elif (send_proactive == 0) or (send_proactive == None):
+                        #if don't sent, randomly check if recomm should be sent .5 prob
+                        log('Proactive model predicted 0 thus randomly choosing...')
+                        send_proact_recomm = random.randint(0,1)
+
+                        #check if 1 was chosen
+                        if send_proact_recomm == 1:
+                            #allow to be sent
+                            send_proactive_answer = True
+                            #set trigger to random
+                            current_trigger = TRIGGERS_DICT[4]
 
                 #only send proactive if allowed
                 if send_proactive_answer:
@@ -1388,7 +1405,7 @@ class Recommender:
                         log('Sending proactive recommendation')
                         evt = np.zeros(D_EVT, dtype=int)
                         #not reactive. proactive
-                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=TRIGGERS_DICT[3]) 
+                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=current_trigger) 
                         #button handled once you call dispatch
                         
                 send_proactive_answer = False #reset

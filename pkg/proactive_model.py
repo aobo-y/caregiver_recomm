@@ -188,11 +188,6 @@ def get_proactive_prediction(hour,model):
         else:
             send_proact_recomm = 0
 
-        #if don't sent, randomly check if recomm should be sent .5 prob
-        if send_proact_recomm == 0:
-            log('Proactive model predicted 0 thus randomly choosing...')
-            send_proact_recomm = random.randint(0,1)
-
         log('Proactive model predicts:',send_proact_recomm) 
         
         success = True
