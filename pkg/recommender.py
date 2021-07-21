@@ -35,6 +35,8 @@ CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
 DEFAULT_SPEAKERID = 9 #when not triggered by acoustic
+#save triggers list (used in ema storing data table)
+TRIGGERS_DICT = {0:'acoustic', 1:'recomm request button', 2:'baseline random', 3: 'proactive model'}
 DIR_PATH = os.path.dirname(__file__)
 
 
@@ -132,6 +134,9 @@ class Recommender:
         if self.mock:
             self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
+        #save dimensions of event array
+        self.event_dimension = evt_dim
+
         #Time defaults, cooldown and baseline
         self.last_action_time = self.timer.now().replace(year=2000)
         self.baseline_start = self.timer.now()
@@ -227,8 +232,8 @@ class Recommender:
 
             A missed message for this button is never sent, it returns immediately from call_poll_ema() no matter what answer
         '''
-        D_EVT = 5  # dimension of event
-        evt = np.random.randn(D_EVT)
+        D_EVT = self.event_dimension  # dimension of event
+        evt = np.zeros(D_EVT, dtype=int)
         time.sleep(10) #before start thread just wait 
 
         while True:
@@ -250,7 +255,7 @@ class Recommender:
 
                             log('Request button triggered recommendation')
                             #reactive. Will not actually be sent if it doesnt satisfy normal requirements such as cool down (EXCEPT MAX MESSAGES requirement)
-                            self.dispatch(DEFAULT_SPEAKERID, evt, reactive=1,requestButton=True)
+                            self.dispatch(DEFAULT_SPEAKERID, evt, reactive=1,requestButton=True, trigger=TRIGGERS_DICT[1])
             except Exception as err:
                 log('start_recomm_button() error', str(err))
                 self.email_alerts('Recommendation request button', str(err), 'Failure in start_recomm_button function',
@@ -262,10 +267,13 @@ class Recommender:
             #after you send it, wait X min to check if you can put the button back on
             time.sleep(seconds_to_sleep) 
 
-    def dispatch(self, speaker_id, evt, reactive=1,requestButton=False):
+    def dispatch(self, speaker_id, evt, reactive=1,requestButton=False, trigger=TRIGGERS_DICT[0]):
         '''
             reactive: 1, if triggered by acoustic system (reactive)
             reactive: 0, if proactive recommendations
+
+            trigger (origin of dispatch): acoustic, recomm request button, baseline random, proactive
+                default is acoustic system
         '''
 
         log('recommender receives event:', str(evt))
@@ -318,16 +326,16 @@ class Recommender:
         if not self.fulldeployment_ready():
             log('Currently in baseline deployment, sending baseline recommendation messages')
             #send the baseline deployment messages
-            self.baseline_recomm(speaker_id)
+            self.baseline_recomm(speaker_id, evt, reactive, trigger)
             return
 
-        thread = Thread(target=self._process_evt, args=(speaker_id, evt, reactive))
+        thread = Thread(target=self._process_evt, args=(speaker_id, evt, reactive, trigger))
         thread.daemon = True
         thread.start()
 
         self.thread = thread
 
-    def _process_evt(self, speaker_id, evt, reactive):
+    def _process_evt(self, speaker_id, evt, reactive, trigger):
         try:
             if self.mode == 'mood_checking':
                 self.last_action_time = self.timer.now()
@@ -387,6 +395,9 @@ class Recommender:
                     'reward': reward,
                     'action_ucbs': ucbs,
                     'message_name': 'daytime:recomm:' + ACTIONS[action_idx],
+                    'reactive': reactive, #1 or 0
+                    'trigger': trigger, #origin of dispatch
+                    'baseline_period': 0, #always not baseline if called from this function
                 })
 
                 log('reward retrieved', reward)
@@ -535,13 +546,16 @@ class Recommender:
         reward = data['reward']
         action_ucbs = json.dumps(data['action_ucbs'])
         message_name = json.dumps(data['message_name'])
+        reactive = json.dumps(data['reactive']) #1 or 0
+        trigger = json.dumps(data['trigger']) #origin of dispatch, see class dictionary
+        baseline_period = json.dumps(data['baseline_period']) #1 or 0
         time = self.timer.now()
 
         # inserting into ema_storing_data table
         # prepare query to insert into ema_storing_data table
-        insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,message_name,uploaded) \
-                 VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s')" % \
-                       (time, event_vct, stats_vct, action, reward, action_ucbs, message_name,0)
+        insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,message_name,reactive,trigger_origin,baseline_period,deployment_id,uploaded) \
+                 VALUES ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % \
+                       (time, event_vct, stats_vct, action, reward, action_ucbs, message_name,reactive,trigger,baseline_period,(str(self.home_id)).strip(),0)
         # insert the data
         try:
             db = get_conn()
@@ -1122,10 +1136,12 @@ class Recommender:
         missed_time = now.strftime('%#I:%M%p')
         return missed_time
 
-    def baseline_recomm(self, speaker_id):
+    def baseline_recomm(self, speaker_id, evt, reactive, trigger):
         """
         recommendation messages for baseline period
         :param speaker_id:
+        :param evt: np array
+        :reactive: 1 or 0
         """
         global MESSAGES_SENT_TODAY
 
@@ -1146,6 +1162,19 @@ class Recommender:
                                                acoust_evt=True, ifmissed='missed:recomm:1')  # 0 -1.0 or any number on scale
 
             MESSAGES_SENT_TODAY += 1 #increase count if no connection error 
+
+            #record messages that are sent during baseline period. Whether randomly randomly triggered or request button or acoustic triggered
+            self.record_data({
+                'event_vct': evt.tolist(),
+                'stats_vct': None, #will show up as NULL
+                'action': -1,
+                'reward': likert_answer, #can be any number on scale, not just 0 or -1
+                'action_ucbs': None, #will show up as NULL,
+                'message_name': message,
+                'reactive': reactive, #1 or 0
+                'trigger': trigger, #origin of dispatch
+                'baseline_period': 1, #always 1 if called from this function
+            })
 
             #dont send if scheduled events have interrupted
             if self.recomm_start:
@@ -1238,12 +1267,12 @@ class Recommender:
         if the baseline period is over, this function returns
         """
 
-        D_EVT = 5  # dimension of event
+        D_EVT = self.event_dimension  # dimension of event
 
         #constantly call recommendations untill end of baseline period
         while True:
             try:
-                evt = np.random.randn(D_EVT)
+                evt = np.zeros(D_EVT, dtype=int)
 
                 # sleep between 5 min to 2 hours till next recommendation
                 sleepfor = random.randint(360, 7200)
@@ -1258,7 +1287,7 @@ class Recommender:
                 #only send if in correct period and no recomm already in progress
                 if self.recomm_start and (not self.recomm_in_progress):
                     log('Sending baseline random recommendation')
-                    self.dispatch(DEFAULT_SPEAKERID, evt,reactive=0) #this is proactive
+                    self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=TRIGGERS_DICT[2]) #this is proactive
                     #button handeled once you call dispatch
 
             except Exception as err:
@@ -1281,38 +1310,39 @@ class Recommender:
             Randomly check if a positive affirmation message should be sent
 
         '''
-        D_EVT = 5  # dimension of event
+        D_EVT = self.event_dimension  # dimension of event
 
         #During Baseline, send out random baseline recommendations 
         if not self.fulldeployment_ready():
             self.rand_recomm()
 
-        #make day shorter to give room for scheduled events
-        adjusted_morn_delt = self.time_morn_delt + timedelta(minutes=30)
-        adjusted_ev_delt = self.time_ev_delt - timedelta(minutes=30)
+        # #make day shorter to give room for scheduled events
+        # adjusted_morn_delt = self.time_morn_delt + timedelta(minutes=30)
+        # adjusted_ev_delt = self.time_ev_delt - timedelta(minutes=30)
 
-        #divide day into 4 periods
-        periods = 4
-        total_time = adjusted_ev_delt-adjusted_morn_delt
-        time_periods = total_time/periods
-        cutoff_periods_lst = []
-        for i in range(1,periods+1):
-            cutoff_periods_lst.append(adjusted_morn_delt+time_periods*i)
+        # #divide day into 4 periods
+        # periods = 4
+        # total_time = adjusted_ev_delt-adjusted_morn_delt
+        # time_periods = total_time/periods
+        # cutoff_periods_lst = []
+        # for i in range(1,periods+1):
+        #     cutoff_periods_lst.append(adjusted_morn_delt+time_periods*i)
 
-        #get current hr and min
-        hr_now = datetime.now().hour
-        min_now = datetime.now().minute
-        current_time_delt = timedelta(hours=hr_now,minutes=min_now)
+        # #get current hr and min
+        # hr_now = datetime.now().hour
+        # min_now = datetime.now().minute
+        # current_time_delt = timedelta(hours=hr_now,minutes=min_now)
 
-        #if we currently are starting before first period
-        if (current_time_delt < adjusted_morn_delt):
-            #sleep till first period starts
-            time.sleep((adjusted_morn_delt - current_time_delt).total_seconds())
-        else:
-            #sleep till the end of the day
-            time.sleep((timedelta(hours=23,minutes=59)-current_time_delt).total_seconds())
-            #sleep till the start period
-            time.sleep((adjusted_morn_delt-timedelta(hours=0,minutes=0)).total_seconds())
+        
+        # #if we currently are starting before first period
+        # if (current_time_delt < adjusted_morn_delt):
+        #     #sleep till first period starts
+        #     time.sleep((adjusted_morn_delt - current_time_delt).total_seconds())
+        # else:
+        #     #sleep till the end of the day
+        #     time.sleep((timedelta(hours=23,minutes=59)-current_time_delt).total_seconds())
+        #     #sleep till the start period
+        #     time.sleep((adjusted_morn_delt-timedelta(hours=0,minutes=0)).total_seconds())
 
         #Try to get the proactive model
         try:
@@ -1327,7 +1357,7 @@ class Recommender:
         #After baseline period, check if a proactive recommendation should be sent
         while True:
             try:
-    
+                
                 #try to send positive affirmation if not sent yet today
                 self.positive_affirmation()
 
@@ -1356,9 +1386,9 @@ class Recommender:
                 #only send if in correct period and no recomm already in progress
                     if self.recomm_start and (not self.recomm_in_progress):
                         log('Sending proactive recommendation')
-                        evt = np.random.randn(D_EVT)
+                        evt = np.zeros(D_EVT, dtype=int)
                         #not reactive. proactive
-                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0) 
+                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=TRIGGERS_DICT[3]) 
                         #button handled once you call dispatch
                         
                 send_proactive_answer = False #reset
