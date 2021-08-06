@@ -35,8 +35,8 @@ CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
 DEFAULT_SPEAKERID = 9 #when not triggered by acoustic
-#save triggers list (used in ema storing data table)
-TRIGGERS_DICT = {0:'acoustic', 1:'recomm request button', 2:'baseline random', 3: 'proactive model', 4:'random'}
+#save triggers list (used in ema storing data table), we have double these categories since each can have ' rejected' added to them
+TRIGGERS_DICT = {0:'acoustic', 1:'recomm request button', 2:'baseline random', 3: 'proactive model', 4:'random'} 
 DIR_PATH = os.path.dirname(__file__)
 
 
@@ -186,7 +186,7 @@ class Recommender:
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
             self.extract_deploy_info()
-                      
+                              
         if (not test) or (schedule_evt_test_config != None):
             # initialize _schedule_evt()
             schedule_thread = Thread(target=self._schedule_evt)
@@ -277,10 +277,13 @@ class Recommender:
         '''
 
         log('recommender receives event:', str(evt))
-        if not self.cooldown_ready():
-            log('recommender is in cooldown period')
+
+        # system must be initialized
+        if not self.sched_initialized:
+            log('Scheduled events not yet initialized')
             return
 
+        #Part 1, check if parameters are valid ------------
         if not isinstance(evt, np.ndarray):
             evt = np.array(evt)
 
@@ -302,24 +305,28 @@ class Recommender:
                               urgent=True)
             return
 
-        # system must be initialized
-        if not self.sched_initialized:
-            log('Scheduled events not yet initialized')
+        #Part 2, check if event can be sent or must balk ------
+        if not self.cooldown_ready():
+            log('recommender is in cooldown period')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
         # acoustic events only sent during time interval or not during current scheduled events
         if not self.recomm_start:
             log('Current time outside acceptable time interval or scheduled events in progress')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
         # daily limit (cool down) (does not apply for request button)
         if (MESSAGES_SENT_TODAY >= MAX_MESSAGES) and (requestButton == False):
             log('Max amount of messages sent today')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
         # do not create a new recomm thread if one is already in progress
         if self.recomm_in_progress:
             log('recommendation event in progress')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
         #BASELINE: if during baseline period, dont send recommendations, use dummy function
@@ -327,6 +334,7 @@ class Recommender:
             log('Currently in baseline deployment, sending baseline recommendation messages')
             #send the baseline deployment messages
             self.baseline_recomm(speaker_id, evt, reactive, trigger)
+            #reject baseline events would have already been recorded since the program would not have reached this point
             return
 
         thread = Thread(target=self._process_evt, args=(speaker_id, evt, reactive, trigger))
@@ -358,37 +366,66 @@ class Recommender:
 
                 if action_idx is None:
                     log('model gives no action')
+                    #record event
+                    self.record_data({
+                        'speakerID': speaker_id,
+                        'event_vct': evt.tolist(),
+                        'stats_vct': None,
+                        'action': -1, #no action predicted
+                        'reward': -1, #thus no reward
+                        'action_ucbs': None,
+                        'message_name': None, #no message sent since no action predicted
+                        'reactive': reactive, #1 or 0
+                        'trigger': trigger, #origin of dispatch
+                        'baseline_period': 0, #always not baseline if called from this function
+                        'reactive_check_in': 0, #no checkin message has been sent yet
+                    })
                     return
 
                 log('model gives action', action_idx)
-                self.last_action_time = self.timer.now()
+                self.last_action_time = self.timer.now() #start cooldown
 
                 # recomm now in progress
                 self.recomm_in_progress = True
                 #button is now off, dont need it until finished recomm
                 self.need_button_on = False
 
-                empathid = self._send_action(speaker_id, action_idx, reactive)
+                empathid, reactive_check_in1_answer = self._send_action(speaker_id, action_idx, reactive)
 
+                #if recommendation is not answered
                 if not empathid:
                     log('no empathid, action not send')
                     self.stop_questions = False  # reset
                     self.recomm_in_progress = False  # reset
                     self.need_button_on = True #allow button to show up again
+                    #record data
+                    self.record_data({
+                        'speakerID': speaker_id,
+                        'event_vct': evt.tolist(),
+                        'stats_vct': self.stats.vct.tolist(),
+                        'action': action_idx,
+                        'reward': -1, #make reward -1 because none recieved
+                        'action_ucbs': ucbs,
+                        'message_name': 'daytime:recomm:' + ACTIONS[action_idx], #a recommendation was sent, just not answered
+                        'reactive': reactive, #1 or 0
+                        'trigger': trigger, #origin of dispatch
+                        'baseline_period': 0, #always not baseline if called from this function
+                        'reactive_check_in': reactive_check_in1_answer, #could be 0 or if reactive and sent then 1,2,3,4 or -1.0
+                    })
                     return
 
                 log('action sent #id', empathid)
 
                 # if send recommendation successfully
                 reward = self.get_reward(empathid, ctx, action_idx, speaker_id,reactive)
-                if reward is None:
-                    log('retrieve no reward for #id:', empathid)
-                    self.stop_questions = False  # reset
-                    self.recomm_in_progress = False  # reset
-                    self.need_button_on = True #allow button to show up again
-                    return
 
+                #for storing purposes, because we want to always store -1 instead of None
+                if reward is None:
+                    reward = -1 
+
+                #store the data whether reward question was answered or not (reward is None but turned to -1)
                 self.record_data({
+                    'speakerID': speaker_id,
                     'event_vct': evt.tolist(),
                     'stats_vct': self.stats.vct.tolist(),
                     'action': action_idx,
@@ -398,8 +435,18 @@ class Recommender:
                     'reactive': reactive, #1 or 0
                     'trigger': trigger, #origin of dispatch
                     'baseline_period': 0, #always not baseline if called from this function
+                    'reactive_check_in': reactive_check_in1_answer, #could be 0 or if reactive and sent then 1,2,3,4 or -1.0
                 })
 
+                #if no reward, exit
+                if reward == -1:
+                    log('retrieve no reward for #id:', empathid)
+                    self.stop_questions = False  # reset
+                    self.recomm_in_progress = False  # reset
+                    self.need_button_on = True #allow button to show up again
+                    return
+
+                #else update model
                 log('reward retrieved', reward)
                 self.model.update(ctx, action_idx, reward)
 
@@ -493,35 +540,54 @@ class Recommender:
         qtype2 = ''
         req_id = None
         pre_ans = None
+        reactive_check_in1_answer = 0 #only used if reactive message. This will be 1, 2, 3, 4, or -1.0 (Next button clicked)
+        want_recommendation = True #for reactive situations in the checkin1 message, the caregiver can choose to not want a recommendation
 
         if self.mock:
             return 'mock_id'
 
         # Send check in question  (depending on if proactive or reactive recommendations)
-        message = 'daytime:check_in:reactive:1'
         if reactive == 0: #if proactive
             message = 'daytime:check_in:proactive:1'
-        # send recommendation if they answer thanks! or dont select choice
-        answer_bank = [0.0, -1.0]
+            # send recommendation if they answer thanks! or dont select choice
+            answer_bank = [0.0, -1.0]
+            # send the question 3 times (if no response) for x duration based on survey id
+            _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1',reactive_recomm=reactive)
+        else: #if reactive send two check in messages
+            message = 'daytime:check_in:reactive:1'
+            answer_bank = [1, 2, 3, 4, -1.0] #-1.0 will mean they didn't select an answer and clicked next. If no answer at all then call_poll_ema would no longer send messages
+            #ask the caregiver if they would like a recommendation since we don't know they are actually stress
+            reactive_check_in1_answer = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1',reactive_recomm=reactive)
 
-        # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1',reactive_recomm=reactive)
+            #if not answered change to 0 
+            if reactive_check_in1_answer is None:
+                reactive_check_in1_answer = 0
+                
+            #if no specific answer or they would like a recommendation, keep going and send the next check-in message
+            if reactive_check_in1_answer in [1, 4,-1.0]:
+                message = 'daytime:check_in:reactive:2'
+                # message recieved 0.0
+                answer_bank = [0.0]
+                _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive)
+            else: #if specifically dont want recommendation then stop
+                want_recommendation = False
 
-        # always send the recommendation
-        # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
-        recomm_id = ACTIONS[action_idx]
-        # get the recommendation category (strip the number)
-        r_cat = ''.join(letter for letter in recomm_id if not letter.isdigit())
-        CURRENT_RECOMM_CATEGORY = r_cat.replace(':', '')
-        msg = 'daytime:recomm:' + recomm_id
+        #send recommendation unless specifically answered check_in:reactive:1 message saying they do not want a recommendation. All else always send recommendation after succesfull check in messages
+        if want_recommendation:
+            # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
+            recomm_id = ACTIONS[action_idx]
+            # get the recommendation category (strip the number)
+            r_cat = ''.join(letter for letter in recomm_id if not letter.isdigit())
+            CURRENT_RECOMM_CATEGORY = r_cat.replace(':', '')
+            msg = 'daytime:recomm:' + recomm_id
 
-        answer_bank = [0.0]  # message received 0.0
-        answer, req_id = self.call_poll_ema(msg, answer_bank, speaker_id, empath_return=True,
-                                            acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive)  # return empath id
-        #req_id is none when stop questions
+            answer_bank = [0.0]  # message received 0.0
+            answer, req_id = self.call_poll_ema(msg, answer_bank, speaker_id, empath_return=True,
+                                                acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive)  # return empath id
+            #req_id is none when stop questions
 
-        #only updated if no conneciton error
-        MESSAGES_SENT_TODAY += 1
+            #only updated if no conneciton error
+            MESSAGES_SENT_TODAY += 1
 
         #if a missed question send the missed message
         if self.recomm_start: 
@@ -534,12 +600,42 @@ class Recommender:
                 _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)
 
         # return the empath id
-        return req_id
+        return req_id, reactive_check_in1_answer
+    
+
+    def record_rejected_event(self,speaker_id,evt,reactive,trigger):
+        '''
+            When an event cannot be sent, it must still be recored in the ema_storing_data table
+            This function sets up the call to the record_data function and calls the record_data function
+
+            Takes the trigger category and adds ' rejected'
+        '''
+        #determine if this event is in the baseline period
+        rejected_baseline_period = 1 #default yes in baseline period
+        if self.fulldeployment_ready():
+            rejected_baseline_period = 0 #no not in baseline period
+
+        #record messages that are sent during baseline period. Whether randomly randomly triggered or request button or acoustic triggered
+        self.record_data({
+            'speakerID':speaker_id, #will have some speaker id even if rejected
+            'event_vct': evt.tolist(), #will have an evt vector even if rejected
+            'stats_vct': None, #no stats vecotr. Will show up as NULL
+            'action': -1, #no action was sent since reject
+            'reward': -1, #no reward so -1. Normally it can be any number on scale, not just 0 or -1
+            'action_ucbs': None, #will show up as NULL,
+            'message_name': None, #no message sent so none
+            'reactive': reactive, #1 or 0
+            'trigger': trigger + ' rejected', #origin of dispatch
+            'baseline_period': rejected_baseline_period, #0 or 1
+            'reactive_check_in': 0, #this question was not sent
+        })
+
 
     def record_data(self, data):
         if self.mock:
             return
 
+        speakerID = json.dumps(data['speakerID'])
         event_vct = json.dumps(data['event_vct'])
         stats_vct = json.dumps(data['stats_vct'])
         action = data['action']
@@ -549,19 +645,21 @@ class Recommender:
         reactive = json.dumps(data['reactive']) #1 or 0
         trigger = json.dumps(data['trigger']) #origin of dispatch, see class dictionary
         baseline_period = json.dumps(data['baseline_period']) #1 or 0
+        reactive_check_in = json.dumps(data['reactive_check_in']) #None, unless a reactive message then 1, 2, 3, 4, or -1.0 (Next clicked (recomm still sent))
         time = self.timer.now()
 
         # inserting into ema_storing_data table
         # prepare query to insert into ema_storing_data table
-        insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,message_name,reactive,trigger_origin,baseline_period,deployment_id,uploaded) \
-                 VALUES ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % \
-                       (time, event_vct, stats_vct, action, reward, action_ucbs, message_name,reactive,trigger,baseline_period,(str(self.home_id)).strip(),0)
+        insert_query = "INSERT INTO ema_storing_data(speakerID,time,event_vct,stats_vct,action,reward,action_vct,message_name,reactive,trigger_origin,baseline_period,reactive_check_in,deployment_id,uploaded) \
+                 VALUES ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % \
+                       (speakerID,time, event_vct, stats_vct, action, reward, action_ucbs, message_name,reactive,trigger,baseline_period,reactive_check_in,(str(self.home_id)).strip(),0)
         # insert the data
         try:
             db = get_conn()
             cursor = db.cursor()
             cursor.execute(insert_query)
             db.commit()
+            log('Recorded event in the ema_storing_data table')
         except Exception as err:
             log('Record recommendation data error:', str(err))
             db.rollback()
@@ -981,6 +1079,7 @@ class Recommender:
         refresh_poll_time = poll_time
         missed_msg_sent = 0 #only send missed msg once if never answered (default), send another time if second chance also no answer
 
+
         # send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
            
@@ -1042,6 +1141,7 @@ class Recommender:
                 refresh_poll_time = 600  # 10min
             elif send_count == 2:
                 refresh_poll_time = 1200  # 20min
+            
        
             #once sent x times and still no answer and msd msg has not been sent before, send missed message
             if (send_count == remind_amt) and (missed_msg_sent < 2):
@@ -1059,6 +1159,7 @@ class Recommender:
                 if (continue_answer == True) and (missed_msg_sent == 0):
                     send_count-=1 #one more opportunity
                     refresh_poll_time = 120 #give 2 min to answer question
+
 
                     #must setup question again since previous question was a different message
                     suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name = setup_message(msg, test=self.test_mode,
@@ -1104,6 +1205,7 @@ class Recommender:
             msd_refresh_poll_time = 600 #10 min
         else:
             msd_refresh_poll_time = 1 #1 second because dont wait
+        
       
         try:
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
@@ -1165,6 +1267,7 @@ class Recommender:
 
             #record messages that are sent during baseline period. Whether randomly randomly triggered or request button or acoustic triggered
             self.record_data({
+                'speakerID':speaker_id,
                 'event_vct': evt.tolist(),
                 'stats_vct': None, #will show up as NULL
                 'action': -1,
@@ -1174,6 +1277,7 @@ class Recommender:
                 'reactive': reactive, #1 or 0
                 'trigger': trigger, #origin of dispatch
                 'baseline_period': 1, #always 1 if called from this function
+                'reactive_check_in': 0, #No check in messages for baseline period
             })
 
             #dont send if scheduled events have interrupted
@@ -1627,6 +1731,7 @@ class Recommender:
                     #Update max messages from previous deployment
                     MAX_MESSAGES = int(prev_maxMessages)
 
+                    log('-- -- -- -- -- -- Recommender System Start -- -- -- -- -- --')
                     log(f'This deployment is a restart, baseline period updated to previous: {self.baseline_period}')
                 else:
                     log(f'This is a new deployment, baseline period: {self.baseline_period}')
