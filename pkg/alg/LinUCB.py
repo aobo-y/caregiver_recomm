@@ -14,7 +14,7 @@ class LinUCB:
       } for i in range(n_choices)
     ]
 
-  def act(self, ctx, return_ucbs=False):
+  def act(self, ctx, return_ucbs=False,subset=None):
     ptas = []
 
     for arm in self.arms:
@@ -29,9 +29,23 @@ class LinUCB:
 
     max_pta = max(ptas)
     avail_choices = [i for i, v in enumerate(ptas) if v == max_pta]
-    choice = np.random.choice(avail_choices)
+    allowed_choices = []
 
-    if ptas[choice] < 0:
+    #if limiting the actions that could be chosen, a subset will be passed in
+    if subset != None:
+      for i in avail_choices:
+        if i in subset:
+          #add only allowed actions
+          allowed_choices.append(i)
+    else:
+      allowed_choices = avail_choices
+    
+    if len(allowed_choices) != 0:
+      choice = np.random.choice(allowed_choices)
+    else:
+      choice = None
+
+    if (choice == None) or (ptas[choice] < 0):#cant index if choice is None
       choice = None
     else:
       choice = int(choice)

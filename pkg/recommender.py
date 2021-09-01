@@ -13,25 +13,30 @@ from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
 from .log import log
-from .ema import call_ema, poll_ema, get_conn, setup_message
+from .ema import call_ema, poll_ema, get_conn, setup_message, connectionError_ema, get_stop_polling, set_stop_polling
 from .time import Time
+from .proactive_model import generate_proactive_models, get_proactive_prediction
 from sendemail import sendemail as se  # change to actual path
 
 ACTIONS = ['timeout:1', 'timeout:2', 'timeout:3', 'timeout:4', 'timeout:5', 'timeout:6', 'timeout:7', 'timeout:8',
            'timeout:9',
-           'breathing:1', 'breathing:2', 'breathing:3', 'breathing:4', 'breathing:5', 'breathing:6', 'breathing:7',
-           'breathing:8',
+           'breathing:1', 'breathing:2', 'breathing:3', 
            'bodyscan:1', 'bodyscan:2',
            'enjoyable:1', 'enjoyable:2', 'enjoyable:3', 'enjoyable:4', 'enjoyable:5',
            'enjoyable:6', 'enjoyable:7', 'enjoyable:8']
 
+#lst of indices allowed for proactive actions
+PROACTIVE_ACTION_INDEX = [n for n,i in enumerate(ACTIONS) if ('breathing' in i) or ('bodyscan' in i)]
 MAX_MESSAGES = 4
 MESSAGES_SENT_TODAY = 0
 COOLDOWN_TIME = 2400 #40 min
-BASELINE_TIME = 2628000 #1 month
+BASELINE_TIME = 1814400 #3 weeks
 CURRENT_RECOMM_CATEGORY = ''
 DAILY_RECOMM_DICT = {}
 EXTRA_ENCRGMNT = ''
+DEFAULT_SPEAKERID = 9 #when not triggered by acoustic
+#save triggers list (used in ema storing data table), we have double these categories since each can have ' rejected' added to them
+TRIGGERS_DICT = {0:'acoustic', 1:'recomm request button', 2:'baseline random', 3: 'proactive model', 4:'random'} 
 DIR_PATH = os.path.dirname(__file__)
 
 
@@ -40,8 +45,8 @@ class ServerModelAdaptor:
         self.proxy = xmlrpc.client.ServerProxy(url, allow_none=True)
         self.client_id = client_id
 
-    def act(self, ctx, return_ucbs=False):
-        return self.proxy.act(self.client_id, ctx.tolist(), return_ucbs)
+    def act(self, ctx, return_ucbs=False, subset=None):
+        return self.proxy.act(self.client_id, ctx.tolist(), return_ucbs, subset)
 
     def update(self, ctx, choice, reward):
         return self.proxy.update(self.client_id, ctx.tolist(), int(choice), int(reward))
@@ -129,6 +134,9 @@ class Recommender:
         if self.mock:
             self.mock_scenario = Scenario(evt_dim, len(ACTIONS))
 
+        #save dimensions of event array
+        self.event_dimension = evt_dim
+
         #Time defaults, cooldown and baseline
         self.last_action_time = self.timer.now().replace(year=2000)
         self.baseline_start = self.timer.now()
@@ -151,6 +159,13 @@ class Recommender:
         self.caregiver_name = 'caregiver'  # default
         self.care_recipient_name = 'care recipient'  # default
         self.home_id = ''  # default
+        self.first_start_date = '' #default 
+
+        #Proactive model
+        self.proactive_model = None
+
+        #affirmation messages
+        self.num_sent_affirmation_msgs = 0 #reset daily to 0
 
         # ema keywords
         self.emaTrue = 'true'
@@ -158,6 +173,10 @@ class Recommender:
 
         #random generations
         self.randgeneration = True
+
+        #recommendation request button
+        self.request_recomm_button = True #if button thread should be activated
+        self.need_button_on = True #true whenever the button should be displayed
 
         # Default start and end time
         self.time_morn_delt = timedelta(hours=10, minutes=1)
@@ -167,7 +186,7 @@ class Recommender:
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
             self.extract_deploy_info()
-
+                              
         if (not test) or (schedule_evt_test_config != None):
             # initialize _schedule_evt()
             schedule_thread = Thread(target=self._schedule_evt)
@@ -175,15 +194,20 @@ class Recommender:
             schedule_thread.start()
             self.schedule_thread = schedule_thread
 
-        #random generation of recommendations
+        #proactive recommendations
         if self.randgeneration:
-            self.artif_recomm_activated = False  # artif recomm activited if no recomm messages sent after random time (reset each evening)
-            randrecomm_thread = Thread(target=self.randrecomm_testing)
+            randrecomm_thread = Thread(target=self.proactive_recomm)
             randrecomm_thread.daemon = True
             randrecomm_thread.start()
             self.randrecomm_thread = randrecomm_thread
 
-
+        #request for recommendation button
+        if self.request_recomm_button:
+            button_threat = Thread(target=self.start_recomm_button)
+            button_threat.daemon = True
+            button_threat.start()
+            self.button_threat = button_threat
+        
     def cooldown_ready(self):
         #true when cooldown for recommendation message is over
         return self.timer.now() - self.last_action_time > self.action_cooldown
@@ -191,58 +215,135 @@ class Recommender:
     def fulldeployment_ready(self):
         #true when 1 month baseline over
         return self.timer.now() - self.baseline_start > self.baseline_period
+    
+    def start_recomm_button(self):
+        '''
+            Starts the threat of the recommendation button
 
-    def dispatch(self, speaker_id, evt):
+            Whenever a different series (Evening, Morning, Recommendation, Baseline Recomm, Baseline Eveing) process starts,
+            it will set need_button_on to False. Once it finishes. need_button_on will be True
+
+            Whenever call_poll_ema is called, it makes STOP_POLLING in ema.py True using set_stop_polling(True)
+            What ever is in poll_ema will be returned. And STOP_POLLING will be reset to False upon exit
+
+            At some point the missed message will be sent to the phone even if a missed message that was sitting on the screen
+
+            If the button is clicked, conditions for a recomm to be sent must still be satisfied (max messages, inside time interval, cooldown)
+
+            A missed message for this button is never sent, it returns immediately from call_poll_ema() no matter what answer
+        '''
+        D_EVT = self.event_dimension  # dimension of event
+        evt = np.zeros(D_EVT, dtype=int)
+        time.sleep(10) #before start thread just wait 
+
+        while True:
+            try:
+                #if during correct period, and no recomm in progress, and we want the button on
+                if self.recomm_start and (not self.recomm_in_progress) and self.need_button_on:
+                    message = 'request:button:1'
+                    log('Placing recommendation request button on screen')
+                    #poll for 12 hours every 0 seconds
+                    #every 0 sec bc at any moment a different thread might need to stop this polling to send a different series
+                    button_answer = self.call_poll_ema(message, all_answers=True,ifmissed='missed:recomm:1',remind_amt=1,poll_time=43200,poll_freq=0,request_button=True) #check every 0 seconds
+
+                    #if button is clicked, dispatch recommendation
+                    if (button_answer == 1) or (button_answer == -1.0): #if answer choice picked or next button clicked
+                        #only send if in correct period and no recomm already in progress
+                        if self.recomm_start and (not self.recomm_in_progress):
+                            #until you decide what to do or also if normal recomm requirements are not satisfied have the blank message on screen
+                            _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)
+
+                            log('Request button triggered recommendation')
+                            #reactive. Will not actually be sent if it doesnt satisfy normal requirements such as cool down (EXCEPT MAX MESSAGES requirement)
+                            self.dispatch(DEFAULT_SPEAKERID, evt, reactive=1,requestButton=True, trigger=TRIGGERS_DICT[1])
+            except Exception as err:
+                log('start_recomm_button() error', str(err))
+                self.email_alerts('Recommendation request button', str(err), 'Failure in start_recomm_button function',
+                              'Possible sources of error: threads overlapping',
+                              urgent=False)
+
+            seconds_to_sleep = 1800 #30 min 
+            log(f'Sleep for: {seconds_to_sleep//60} minutes before checking if request button should be placed on screen')
+            #after you send it, wait X min to check if you can put the button back on
+            time.sleep(seconds_to_sleep) 
+
+    def dispatch(self, speaker_id, evt, reactive=1,requestButton=False, trigger=TRIGGERS_DICT[0]):
+        '''
+            reactive: 1, if triggered by acoustic system (reactive)
+            reactive: 0, if proactive recommendations
+
+            trigger (origin of dispatch): acoustic, recomm request button, baseline random, proactive model, random
+                default is acoustic system
+        '''
+
         log('recommender receives event:', str(evt))
-        if not self.cooldown_ready():
-            log('recommender is in cooldown period')
-            return
-
-        if not isinstance(evt, np.ndarray):
-            evt = np.array(evt)
-
-        # safety in case of numpy array or float
-        if type(speaker_id) is not int:
-            self.email_alerts('Speaker ID', 'TypeError', 'Speaker id is the wrong type (FATAL)',
-                              'Make sure acoustic system passes correct speaker id type: int',
-                              urgent=True)
-            raise TypeError('Speaker id must be integer, received: ' + speaker_id)
 
         # system must be initialized
         if not self.sched_initialized:
             log('Scheduled events not yet initialized')
             return
 
+        #Part 1, check if parameters are valid ------------
+        if not isinstance(evt, np.ndarray):
+            evt = np.array(evt)
+
+        # safety in case of numpy array or float or str
+        if type(speaker_id) is not int:
+            try:
+                speaker_id = int(speaker_id)
+            except Exception as err:
+                log('Speaker ID type error in dispatch function:', str(err))
+                self.email_alerts('Speaker ID', str(err), 'Speaker id is the wrong type (FATAL)',
+                              'Make sure acoustic system passes correct speaker id type: positive int',
+                              urgent=True)
+                return 
+        #speaker id cant have a negative sign
+        if speaker_id <= -1:
+            log('Speaker ID value error in dispatch function')
+            self.email_alerts('Speaker ID value error in dispatch function', 'Invalid Speaker ID value', 'Speaker id is a negative value (FATAL)',
+                              'Make sure acoustic system passes correct speaker id type: positive int',
+                              urgent=True)
+            return
+
+        #Part 2, check if event can be sent or must balk ------
+        if not self.cooldown_ready():
+            log('recommender is in cooldown period')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
+            return
+
         # acoustic events only sent during time interval or not during current scheduled events
         if not self.recomm_start:
             log('Current time outside acceptable time interval or scheduled events in progress')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
-        # daily limit (cool down)
-        if MESSAGES_SENT_TODAY >= MAX_MESSAGES:
+        # daily limit (cool down) (does not apply for request button)
+        if (MESSAGES_SENT_TODAY >= MAX_MESSAGES) and (requestButton == False):
             log('Max amount of messages sent today')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
         # do not create a new recomm thread if one is already in progress
         if self.recomm_in_progress:
             log('recommendation event in progress')
+            self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
             return
 
         #BASELINE: if during baseline period, dont send recommendations, use dummy function
         if not self.fulldeployment_ready():
             log('Currently in baseline deployment, sending baseline recommendation messages')
             #send the baseline deployment messages
-            self.baseline_recomm(speaker_id)
+            self.baseline_recomm(speaker_id, evt, reactive, trigger)
+            #reject baseline events would have already been recorded since the program would not have reached this point
             return
 
-
-        thread = Thread(target=self._process_evt, args=(speaker_id, evt))
+        thread = Thread(target=self._process_evt, args=(speaker_id, evt, reactive, trigger))
         thread.daemon = True
         thread.start()
 
         self.thread = thread
 
-    def _process_evt(self, speaker_id, evt):
+    def _process_evt(self, speaker_id, evt, reactive, trigger):
         try:
             if self.mode == 'mood_checking':
                 self.last_action_time = self.timer.now()
@@ -257,45 +358,95 @@ class Recommender:
                 self.stats.refresh_vct()
                 ctx = np.concatenate([evt, self.stats.vct])
 
-                action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
+                #if proactive pass in only the allowed subset of actions
+                if reactive == 0:
+                    action_idx, ucbs = self.model.act(ctx, return_ucbs=True, subset=PROACTIVE_ACTION_INDEX)
+                else: #allow all actions
+                    action_idx, ucbs = self.model.act(ctx, return_ucbs=True)
 
                 if action_idx is None:
                     log('model gives no action')
+                    #record event
+                    self.record_data({
+                        'speakerID': speaker_id,
+                        'event_vct': evt.tolist(),
+                        'stats_vct': None,
+                        'action': -1, #no action predicted
+                        'reward': -1, #thus no reward
+                        'action_ucbs': None,
+                        'message_name': None, #no message sent since no action predicted
+                        'reactive': reactive, #1 or 0
+                        'trigger': trigger, #origin of dispatch
+                        'baseline_period': 0, #always not baseline if called from this function
+                        'reactive_check_in': 0, #no checkin message has been sent yet
+                    })
                     return
 
                 log('model gives action', action_idx)
-                self.last_action_time = self.timer.now()
+                self.last_action_time = self.timer.now() #start cooldown
 
                 # recomm now in progress
                 self.recomm_in_progress = True
+                #button is now off, dont need it until finished recomm
+                self.need_button_on = False
 
-                empathid = self._send_action(speaker_id, action_idx)
+                empathid, reactive_check_in1_answer = self._send_action(speaker_id, action_idx, reactive)
 
+                #if recommendation is not answered
                 if not empathid:
                     log('no empathid, action not send')
                     self.stop_questions = False  # reset
                     self.recomm_in_progress = False  # reset
+                    self.need_button_on = True #allow button to show up again
+                    #record data
+                    self.record_data({
+                        'speakerID': speaker_id,
+                        'event_vct': evt.tolist(),
+                        'stats_vct': self.stats.vct.tolist(),
+                        'action': action_idx,
+                        'reward': -1, #make reward -1 because none recieved
+                        'action_ucbs': ucbs,
+                        'message_name': 'daytime:recomm:' + ACTIONS[action_idx], #a recommendation was sent, just not answered
+                        'reactive': reactive, #1 or 0
+                        'trigger': trigger, #origin of dispatch
+                        'baseline_period': 0, #always not baseline if called from this function
+                        'reactive_check_in': reactive_check_in1_answer, #could be 0 or if reactive and sent then 1,2,3,4 or -1.0
+                    })
                     return
 
                 log('action sent #id', empathid)
 
                 # if send recommendation successfully
-                reward = self.get_reward(empathid, ctx, action_idx, speaker_id)
-                if reward is None:
-                    log('retrieve no reward for #id:', empathid)
-                    self.stop_questions = False  # reset
-                    self.recomm_in_progress = False  # reset
-                    return
+                reward = self.get_reward(empathid, ctx, action_idx, speaker_id,reactive)
 
+                #for storing purposes, because we want to always store -1 instead of None
+                if reward is None:
+                    reward = -1 
+
+                #store the data whether reward question was answered or not (reward is None but turned to -1)
                 self.record_data({
+                    'speakerID': speaker_id,
                     'event_vct': evt.tolist(),
                     'stats_vct': self.stats.vct.tolist(),
                     'action': action_idx,
                     'reward': reward,
                     'action_ucbs': ucbs,
-                    'message_name': 'daytime:recomm:' + ACTIONS[action_idx]
+                    'message_name': 'daytime:recomm:' + ACTIONS[action_idx],
+                    'reactive': reactive, #1 or 0
+                    'trigger': trigger, #origin of dispatch
+                    'baseline_period': 0, #always not baseline if called from this function
+                    'reactive_check_in': reactive_check_in1_answer, #could be 0 or if reactive and sent then 1,2,3,4 or -1.0
                 })
 
+                #if no reward, exit
+                if reward == -1:
+                    log('retrieve no reward for #id:', empathid)
+                    self.stop_questions = False  # reset
+                    self.recomm_in_progress = False  # reset
+                    self.need_button_on = True #allow button to show up again
+                    return
+
+                #else update model
                 log('reward retrieved', reward)
                 self.model.update(ctx, action_idx, reward)
 
@@ -303,15 +454,16 @@ class Recommender:
                 self.stats.update(action_idx)
 
         except Exception as err:
-            log('Event processing error:', err)
+            log('Event processing error:', str(err))
             self.email_alerts('Recommendation Messages', str(err), 'Failure in send_action or get_reward functions',
                               'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
                               urgent=False)
         finally:
             self.stop_questions = False  # reset
             self.recomm_in_progress = False  # reset
+            self.need_button_on = True #allow button to show up again
 
-    def get_reward(self, empathid, ctx, action_idx, speaker_id):
+    def get_reward(self, empathid, ctx, action_idx, speaker_id, reactive):
         global DAILY_RECOMM_DICT, CURRENT_RECOMM_CATEGORY, EXTRA_ENCRGMNT
         if self.mock:
             return self.mock_scenario.insight(0, ctx, action_idx)[0]
@@ -320,7 +472,7 @@ class Recommender:
 
         if self.recomm_start:
             # send the blank message after recommendation
-            _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)
+            _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)
 
         if 'enjoyable' in CURRENT_RECOMM_CATEGORY:
             self.timer.sleep(3600)  # wait for 60 min if recommendation is enjoyable activity
@@ -332,14 +484,14 @@ class Recommender:
         message = 'daytime:postrecomm:implement:1'
         answer_bank = [1.0, 0.0, -1.0]
         # ask if stress management tip was done (yes no) question
-        postrecomm_answer = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, ifmissed='missed:recomm:1')
+        postrecomm_answer = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, ifmissed='missed:recomm:1', reactive_recomm=reactive)
 
         # if done (Yes)
         if postrecomm_answer == 1.0:
             reward = 1.0
             message = 'daytime:postrecomm:helpfulyes:1'
             helpful_yes = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
-                                             acoust_evt=True, ifmissed='missed:recomm:1')  # return all answers
+                                             acoust_evt=True, ifmissed='missed:recomm:1', reactive_recomm=reactive)  # return all answers
 
             if helpful_yes and (helpful_yes != -1.0):  # dont want to add None to list
                 # store the category of recommendation and how helpful it was
@@ -355,14 +507,14 @@ class Recommender:
 
             # if helpful_no: #multiple choice 1 2 or 3
             helpful_no = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
-                                            acoust_evt=True, ifmissed='missed:recomm:1')  # return all answers
+                                            acoust_evt=True, ifmissed='missed:recomm:1', reactive_recomm=reactive)  # return all answers
 
         # check if they want more morning encourement msg
         if EXTRA_ENCRGMNT:
             # send extra encrgment msg from morning message
             message = EXTRA_ENCRGMNT
             # ask until skipped: -1.0, 3 reloads: None, or an answer
-            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True, acoust_evt=True, ifmissed='missed:recomm:1')
+            thanks_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True, acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive)
             EXTRA_ENCRGMNT = ''
 
         # recomm start could be changed any second by the scheduled events
@@ -373,86 +525,143 @@ class Recommender:
                 #Dont send message to keep the missed message on the screen
             elif (not self.stop_questions): #only send if the last question was answered
                 # send the blank message if survey is completed
-                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode) 
+                _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode) 
 
         return reward
 
-    def _send_action(self, speaker_id, action_idx):
+    def _send_action(self, speaker_id, action_idx, reactive):
         '''
         Send the chosen action to the downstream
         return err if any
         '''
         global MESSAGES_SENT_TODAY, CURRENT_RECOMM_CATEGORY
-        MESSAGES_SENT_TODAY += 1
 
         retrieval_object2 = ''
         qtype2 = ''
         req_id = None
         pre_ans = None
+        reactive_check_in1_answer = 0 #only used if reactive message. This will be 1, 2, 3, 4, or -1.0 (Next button clicked)
+        want_recommendation = True #for reactive situations in the checkin1 message, the caregiver can choose to not want a recommendation
 
         if self.mock:
             return 'mock_id'
 
-        # Send check in question (prequestion) pick random question (Not anymore)
-        #randnum1 = str(random.randint(1, 5))
-        message = 'daytime:check_in:1'
-        # send recommendation if they answer thanks! or dont select choice
-        answer_bank = [0.0, -1.0]
+        # Send check in question  (depending on if proactive or reactive recommendations)
+        if reactive == 0: #if proactive
+            message = 'daytime:check_in:proactive:1'
+            # send recommendation if they answer thanks! or dont select choice
+            answer_bank = [0.0, -1.0]
+            # send the question 3 times (if no response) for x duration based on survey id
+            _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1',reactive_recomm=reactive)
+        else: #if reactive send two check in messages
+            message = 'daytime:check_in:reactive:1'
+            answer_bank = [1, 2, 3, 4, -1.0] #-1.0 will mean they didn't select an answer and clicked next. If no answer at all then call_poll_ema would no longer send messages
+            #ask the caregiver if they would like a recommendation since we don't know they are actually stress
+            reactive_check_in1_answer = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1',reactive_recomm=reactive)
 
-        # send the question 3 times (if no response) for x duration based on survey id
-        _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
+            #if not answered change to 0 
+            if reactive_check_in1_answer is None:
+                reactive_check_in1_answer = 0
+                
+            #if no specific answer or they would like a recommendation, keep going and send the next check-in message
+            if reactive_check_in1_answer in [1, 4,-1.0]:
+                message = 'daytime:check_in:reactive:2'
+                # message recieved 0.0
+                answer_bank = [0.0]
+                _ = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive)
+            else: #if specifically dont want recommendation then stop
+                want_recommendation = False
 
-        # always send the recommendation
-        # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
-        recomm_id = ACTIONS[action_idx]
-        # get the recommendation category (strip the number)
-        r_cat = ''.join(letter for letter in recomm_id if not letter.isdigit())
-        CURRENT_RECOMM_CATEGORY = r_cat.replace(':', '')
-        msg = 'daytime:recomm:' + recomm_id
+        #send recommendation unless specifically answered check_in:reactive:1 message saying they do not want a recommendation. All else always send recommendation after succesfull check in messages
+        if want_recommendation:
+            # pick recommendation based on action id, recomm_categ = {'timeout': 9, 'breathing': 8, 'mindful': 2, 'meaningful':8}
+            recomm_id = ACTIONS[action_idx]
+            # get the recommendation category (strip the number)
+            r_cat = ''.join(letter for letter in recomm_id if not letter.isdigit())
+            CURRENT_RECOMM_CATEGORY = r_cat.replace(':', '')
+            msg = 'daytime:recomm:' + recomm_id
 
-        answer_bank = [0.0]  # message received 0.0
-        answer, req_id = self.call_poll_ema(msg, answer_bank, speaker_id, empath_return=True,
-                                            acoust_evt=True, ifmissed='missed:recomm:1')  # return empath id
-        #req_id is none when stop questions
+            answer_bank = [0.0]  # message received 0.0
+            answer, req_id = self.call_poll_ema(msg, answer_bank, speaker_id, empath_return=True,
+                                                acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive)  # return empath id
+            #req_id is none when stop questions
+
+            #only updated if no conneciton error
+            MESSAGES_SENT_TODAY += 1
 
         #if a missed question send the missed message
         if self.recomm_start: 
             if self.stop_questions:
                 self.stop_questions = False  # reset to allow for new question to be sent
-                #dont sent message, keep missed message on screen
+                #dont send message, keep missed message on screen
             #If answered, send this screen as a wait screen. in case of None empath id
             elif (not self.stop_questions):
                 # send directly even if stop questions is true, because get_reward wont be called
-                _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)
+                _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)
 
         # return the empath id
-        return req_id
+        return req_id, reactive_check_in1_answer
+    
+
+    def record_rejected_event(self,speaker_id,evt,reactive,trigger):
+        '''
+            When an event cannot be sent, it must still be recored in the ema_storing_data table
+            This function sets up the call to the record_data function and calls the record_data function
+
+            Takes the trigger category and adds ' rejected'
+        '''
+        #determine if this event is in the baseline period
+        rejected_baseline_period = 1 #default yes in baseline period
+        if self.fulldeployment_ready():
+            rejected_baseline_period = 0 #no not in baseline period
+
+        #record messages that are sent during baseline period. Whether randomly randomly triggered or request button or acoustic triggered
+        self.record_data({
+            'speakerID':speaker_id, #will have some speaker id even if rejected
+            'event_vct': evt.tolist(), #will have an evt vector even if rejected
+            'stats_vct': None, #no stats vecotr. Will show up as NULL
+            'action': -1, #no action was sent since reject
+            'reward': -1, #no reward so -1. Normally it can be any number on scale, not just 0 or -1
+            'action_ucbs': None, #will show up as NULL,
+            'message_name': None, #no message sent so none
+            'reactive': reactive, #1 or 0
+            'trigger': trigger + ' rejected', #origin of dispatch
+            'baseline_period': rejected_baseline_period, #0 or 1
+            'reactive_check_in': 0, #this question was not sent
+        })
+
 
     def record_data(self, data):
         if self.mock:
             return
 
+        speakerID = json.dumps(data['speakerID'])
         event_vct = json.dumps(data['event_vct'])
         stats_vct = json.dumps(data['stats_vct'])
         action = data['action']
         reward = data['reward']
         action_ucbs = json.dumps(data['action_ucbs'])
         message_name = json.dumps(data['message_name'])
+        reactive = json.dumps(data['reactive']) #1 or 0
+        trigger = json.dumps(data['trigger']) #origin of dispatch, see class dictionary
+        baseline_period = json.dumps(data['baseline_period']) #1 or 0
+        reactive_check_in = json.dumps(data['reactive_check_in']) #None, unless a reactive message then 1, 2, 3, 4, or -1.0 (Next clicked (recomm still sent))
         time = self.timer.now()
 
         # inserting into ema_storing_data table
         # prepare query to insert into ema_storing_data table
-        insert_query = "INSERT INTO ema_storing_data(time,event_vct,stats_vct,action,reward,action_vct,message_name,uploaded) \
-                 VALUES ('%s','%s','%s','%s', '%s','%s','%s','%s')" % \
-                       (time, event_vct, stats_vct, action, reward, action_ucbs, message_name,0)
+        insert_query = "INSERT INTO ema_storing_data(speakerID,time,event_vct,stats_vct,action,reward,action_vct,message_name,reactive,trigger_origin,baseline_period,reactive_check_in,deployment_id,uploaded) \
+                 VALUES ('%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % \
+                       (speakerID,time, event_vct, stats_vct, action, reward, action_ucbs, message_name,reactive,trigger,baseline_period,reactive_check_in,(str(self.home_id)).strip(),0)
         # insert the data
         try:
             db = get_conn()
             cursor = db.cursor()
             cursor.execute(insert_query)
             db.commit()
+            log('Recorded event in the ema_storing_data table')
         except Exception as err:
-            log('Record recommendation data error:', err)
+            log('Record recommendation data error:', str(err))
             db.rollback()
             self.email_alerts('EMA Storing Data', str(err),
                               'Error occured in recording data in the EMA Storing Data table',
@@ -606,24 +815,38 @@ class Recommender:
                     self.recomm_start = False  # recomm should not be sent anymore
                     self.stop_questions = False #reset to allow for questions to be sent 
 
+                    self.need_button_on = False #no longer need the button. Stop till further notice
+
                     # send evening intro message -------
                     message = 'evening:intro:1'
                     evening_introanswer = self.call_poll_ema(message, all_answers=True, phonealarm=self.emaTrue, ifmissed='missed:evening:1')  # 0.0 msg rec or -1.0 skipped
 
                     # send the evening message likert scale----------------------
                     # likert questions evening
-                    evlikertlst = ['stress:1', 'lonely:1', 'health:1', 'health:2', 'interactions:1']
+                    evlikertlst = ['likert:stress:1', 'likert:lonely:1', 'likert:health:1', 'likert:health:2']
                     # shuffle the list
                     random.shuffle(evlikertlst)
                     ev_i = 0
                     # send all likert questions in a random order
                     while ev_i < len(evlikertlst):
                         # go through list of questions in random order
-                        message = 'evening:likert:' + evlikertlst[ev_i]
+                        message = 'evening:' + evlikertlst[ev_i]
                         answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
                         # increment count
                         ev_i += 1
-
+                    
+                    #textbox messages
+                    evtextboxlst = ['textbox:interactions:1','textbox:interactions:2']
+                    #shuffle the list
+                    random.shuffle(evtextboxlst)
+                    ev_i = 0
+                    #send textbox messages in random order
+                    while ev_i < len(evtextboxlst):
+                        message = 'evening:' + evtextboxlst[ev_i]
+                        answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
+                        # increment count
+                        ev_i += 1
+                        
                     # send the evening message daily goal follow-up ---------------
                     message = 'evening:daily:goal:1'  # always send the same message
                     answer_bank = [1.0, 0.0, -1.0]  # yes, no, skipped
@@ -649,6 +872,10 @@ class Recommender:
                     if recomm_answer == 1.0:
                         message = 'evening:stress:managyes:1'  # always send the same message
                         stress1_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')
+
+                        #ask the next quesstion
+                        message = 'evening:stress:managyes:2'
+                        stress2_answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')
 
                     # if no
                     elif recomm_answer == 0.0:
@@ -732,8 +959,12 @@ class Recommender:
                                                                                 minutes=min_change)  # gives you new hour:min
                             #only update if before 00:00
                             if (morning_timedelta > timedelta(hours=0,minutes=0)):
-                                # reset scheduled events
-                                schedule_evts[0] = (morning_timedelta, 'morning message')  # since tuples immutable
+                                #only update if morning and evening stay at least 5 hours apart
+                                if (schedule_evts[1][0]-morning_timedelta).total_seconds() > 18000:
+                                    #reset
+                                    self.time_morn_delt = morning_timedelta
+                                    # reset scheduled events
+                                    schedule_evts[0] = (morning_timedelta, 'morning message')  # since tuples immutable
 
                         # send question about evening end time change
                         message = 'weekly:startstop:stop:1'
@@ -748,11 +979,15 @@ class Recommender:
 
                             #only update if before 23:59
                             if (evening_timedelta < timedelta(hours=23,minutes=59)):
-                                # reset scheduled events
-                                schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
+                                #only update if morning and evening stay at least 5 hours apart
+                                if (evening_timedelta-schedule_evts[0][0]).total_seconds() > 18000:
+                                    #reset
+                                    self.time_ev_delt = evening_timedelta
+                                    # reset scheduled events
+                                    schedule_evts[1] = (evening_timedelta, 'evening message')  # since tuples immutable
                 
                 #Reminder Messages ---- After weekly survey or at the end of evening messages...even during baseline               
-                if event_id == 'evening message':
+                if event_id == 'evening message' and (not self.stop_questions):
                     # Send reminder about batter
                     message = 'evening:reminder:battery:1'
                     battery_answer = self.call_poll_ema(message, all_answers=True,ifmissed='missed:evening:1')  # multiple choice
@@ -763,14 +998,14 @@ class Recommender:
                     #missed message stays on screen
                 else:
                     # send the blank message after everything for both morning and evening messages-------------
-                    _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
+                    _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
 
                 #log real evening and morning messages, baseline is logged in baseline function
                 if self.fulldeployment_ready():
                     log(f'Scheduled event sent: {event_id}', timer=self.timer)
 
             except Exception as error:
-                log('Send scheduled action error:', error, timer=self.timer)
+                log('Send scheduled action error:', str(error), timer=self.timer)
                 self.email_alerts('Scheduled Events', str(error),
                                   'Error occured in the the following scheduled event: ' + event_id,
                                   'Possible sources of error: start/end time issue, connection, storing/reading data in EMA tables, reading json file, overlap issue',
@@ -785,32 +1020,48 @@ class Recommender:
 
                     #save the baseline period left
                     self.savedDeployments(update_baseline_period=True)
+
+                    self.need_button_on = True #need the button on next time it checks
+
                 elif event_id == 'evening message':
                     #resets
                     self.recomm_start = False  # backup incase error
                     self.stop_questions = False #reset incase error
-                    self.artif_recomm_activated = False  # artif recomm activited if no recomm messages sent after random time
                     MESSAGES_SENT_TODAY = 0  # reset amount of recommendation messages to 0
+                    self.num_sent_affirmation_msgs = 0 #reset number of  affirmation msgs sent today to 0
                     EXTRA_ENCRGMNT = ''
-
                     #save the baseline period left
                     self.savedDeployments(update_baseline_period=True)
-
                     # send the scheduled email
                     self.email_alerts(scheduled_alert=True)
+
+                    self.need_button_on = False #no button next
+
+                    #Try to get the proactive model
+                    try:
+                        #run model and save
+                        self.proactive_model = generate_proactive_models()
+                        log('Successfully updated proactive model after evening messages')
+                    except Exception as err:
+                        log('Unable to update proactive model in proactive_recomm()',str(err))
 
             evt_count += 1
             if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
                 return
 
-    def call_poll_ema(self, msg, msg_answers=[], speaker_id='1', all_answers=False, empath_return=False, remind_amt=3,
-                      acoust_evt=False, phonealarm='false',poll_time=300,ifmissed='missed:recomm:1'):
+    def call_poll_ema(self, msg, msg_answers=[], speaker_id='9', all_answers=False, empath_return=False, remind_amt=3,
+                      acoust_evt=False, phonealarm='false',poll_time=300,ifmissed='missed:recomm:1',reactive_recomm=0, poll_freq=0,request_button=False):
 
         # do not send questions if previous question unanswered
         if (self.stop_questions == True) and (empath_return == True):
             return None, None
         elif self.stop_questions == True:
             return None
+
+        #stop what ever is being currently polled for in poll_ema() (if button is still being polled)
+        set_stop_polling(True) #Button will receive None and keep checking if it should be on
+        #stop polling will be reset to False when exiting poll_ema and entering poll_ema (if in use)
+        _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode) #just reset the screen with blank, too quick to see
 
         #get the time of the first message sent only once
         missed_time = self.get_time()
@@ -828,6 +1079,7 @@ class Recommender:
         refresh_poll_time = poll_time
         missed_msg_sent = 0 #only send missed msg once if never answered (default), send another time if second chance also no answer
 
+
         # send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
            
@@ -839,12 +1091,15 @@ class Recommender:
 
             try:
                 # returns empathid, the polling object (for different types of questions from ema_data), and question type
-                req_id, retrieval_object, qtype = call_ema(speaker_id, test=self.test_mode, already_setup=setup_lst, alarm=phonealarm)
+                req_id, retrieval_object, qtype = call_ema(speaker_id, test=self.test_mode, already_setup=setup_lst, alarm=phonealarm,reactive=reactive_recomm, snd_cnt=send_count+1)
+                
+                #poll
                 answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype,
                                   duration=(refresh_poll_time if not self.test_mode else 0.1),
-                                  freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
+                                  freq=(poll_freq if not self.test_mode else 0.02), test_mode=self.test_mode)
+            
             except Exception as e:
-                log('Call_ema or Poll_ema Error', e)
+                log('Call_ema or Poll_ema Error', str(e))
                 if ('WinError' in str(e)) and (exception_count == 0):
                     #try again after connection error only once
                     exception_count+=1
@@ -856,6 +1111,12 @@ class Recommender:
                                       'Connection Error, WinError failed attempt to make a connection with the phone after 2 attempts',
                                       urgent=False)
                     raise
+                #btw conneciton errors are always stored in reward_data from call_ema()
+            
+            #if this is the recommender request button just return the answer
+            if request_button == True:
+                #never send missed messages or try again for connection error
+                return answer #either 1: answer selected -1.0: Next Clicked None: Not answered
 
             # answer: None, if nothing is selected...reload
             # any answer other than None
@@ -880,7 +1141,8 @@ class Recommender:
                 refresh_poll_time = 600  # 10min
             elif send_count == 2:
                 refresh_poll_time = 1200  # 20min
-        
+            
+       
             #once sent x times and still no answer and msd msg has not been sent before, send missed message
             if (send_count == remind_amt) and (missed_msg_sent < 2):
 
@@ -897,6 +1159,7 @@ class Recommender:
                 if (continue_answer == True) and (missed_msg_sent == 0):
                     send_count-=1 #one more opportunity
                     refresh_poll_time = 120 #give 2 min to answer question
+
 
                     #must setup question again since previous question was a different message
                     suid, retrieval_object, qtype, stored_msg_sent, stored_msg_name = setup_message(msg, test=self.test_mode,
@@ -935,12 +1198,14 @@ class Recommender:
         msd_setup_lst = [msd_suid, msd_retrieval_object, msd_qtype, msd_stored_msg_sent, msd_stored_msg_name]
 
         msd_req_id = None
+        missed_answer = None
 
         #if first time sent, wait 10 min
         if msd_msg_sent == 0:
             msd_refresh_poll_time = 600 #10 min
         else:
             msd_refresh_poll_time = 1 #1 second because dont wait
+        
       
         try:
             # returns empathid, the polling object (for different types of questions from ema_data), and question type
@@ -949,7 +1214,7 @@ class Recommender:
                                 duration=(msd_refresh_poll_time if not self.test_mode else 0.1),
                                 freq=(0 if not self.test_mode else 0.02), test_mode=self.test_mode)
         except Exception as e:
-            log('send_missed_msg', e)
+            log('send_missed_msg', str(e))
             self.email_alerts('send_missed_msg', str(e),'Failure in send_missed_msg function',
                                 'Connection Error, setup_message, call_ema, or poll_ema',
                                 urgent=False)
@@ -973,7 +1238,358 @@ class Recommender:
         missed_time = now.strftime('%#I:%M%p')
         return missed_time
 
+    def baseline_recomm(self, speaker_id, evt, reactive, trigger):
+        """
+        recommendation messages for baseline period
+        :param speaker_id:
+        :param evt: np array
+        :reactive: 1 or 0
+        """
+        global MESSAGES_SENT_TODAY
+
+        try:
+            self.recomm_in_progress = True  # now in progress
+            self.need_button_on = False #button must be off now
+            self.last_action_time = self.timer.now() #start cooldown
+
+            # # # baseline detection confirm
+            # message = 'baseline:recomm:binaryconfirm:1'
+            # answer_bank = [1.0, 0.0, -1.0]
+            # # ask if feeling angy yes/no, first question alarm on
+            # baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
+            #                                          phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
+
+            message = 'baseline:recomm:likertconfirm:1'
+            likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
+                                               acoust_evt=True, ifmissed='missed:recomm:1')  # 0 -1.0 or any number on scale
+
+            MESSAGES_SENT_TODAY += 1 #increase count if no connection error 
+
+            #record messages that are sent during baseline period. Whether randomly randomly triggered or request button or acoustic triggered
+            self.record_data({
+                'speakerID':speaker_id,
+                'event_vct': evt.tolist(),
+                'stats_vct': None, #will show up as NULL
+                'action': -1,
+                'reward': likert_answer, #can be any number on scale, not just 0 or -1
+                'action_ucbs': None, #will show up as NULL,
+                'message_name': message,
+                'reactive': reactive, #1 or 0
+                'trigger': trigger, #origin of dispatch
+                'baseline_period': 1, #always 1 if called from this function
+                'reactive_check_in': 0, #No check in messages for baseline period
+            })
+
+            #dont send if scheduled events have interrupted
+            if self.recomm_start:
+                # when a message isnt answered (missed)
+                if self.stop_questions:
+                    # in order to send this message
+                    self.stop_questions = False  # reset
+                    #dont send message, just keep the missed message up
+                else:
+                    # send the blank message after everything for both morning and evening messages-------------
+                    _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
+
+            log('Baseline Recommendation Messages Sent')
+
+        except Exception as err:
+            log('Baseline Recommendation Confirmation Error', str(err))
+            self.email_alerts('Baseline Recommendation', str(err), 'Failure in baseline_recomm function',
+                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
+                              urgent=False)
+        finally:
+            self.stop_questions = False  # reset
+            self.recomm_in_progress = False  # reset
+            self.need_button_on =True #turn button on
+
+        return
+
+
+    def baseline_schedule_evt(self,event_id):
+        """
+        scheduled events for the baseline period
+
+        :param event_id: specifies the event 'evening message' or 'morning message'
+        """
+        global MESSAGES_SENT_TODAY
+
+        try:
+            #evening messages for baseline
+            if event_id == 'evening message':
+                self.recomm_start = False  # recomm should not be sent anymore
+                self.stop_questions = False #allow new messages to be sent incase it was never reset
+                self.need_button_on = False #button off
+                MESSAGES_SENT_TODAY = 0  # reset messages to 0
+                self.num_sent_affirmation_msgs = 0 #reset number of affirmation msgs sent today to 0
+
+                # baseline likert evening questions
+                likertlst = ['likertstress:1', 'likertlonely:1', 'likerthealth:1', 'likerthealth:2']
+                # shuffle the list
+                random.shuffle(likertlst)
+                i = 0
+                # send all likert questions in a random order
+                while i < len(likertlst):
+                    # only make the phone ring on the first quesiton
+                    alarmsetting = self.emaFalse
+                    if i == 0:
+                        alarmsetting = self.emaTrue
+                    message = 'baseline:evening:' + likertlst[i]
+                    answer = self.call_poll_ema(message, all_answers=True,phonealarm=alarmsetting, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
+                    # increment count
+                    i += 1
+
+                #textbox messages
+                textboxlst = ['textboxinteractions:1','textboxinteractions:2']
+                #shuffle the list
+                random.shuffle(textboxlst)
+                i = 0 
+                #send textbox messages in random order
+                while i < len(textboxlst):
+                    message = 'baseline:evening:' + textboxlst[i]
+                    answer = self.call_poll_ema(message, all_answers=True, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
+                    # increment count
+                    i += 1
+
+                #blank message handled in scheduled events function 
+
+                log('Baseline Evening Messages Sent')
+
+        except Exception as err:
+            log('Baseline Scheduled Events Error', str(err))
+            self.email_alerts('Baseline Scheduled Events', str(err), 'Failure in baseline_schedule_evt function',
+                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
+                              urgent=False)
+
+        return
+
+    def rand_recomm(self):
+        """
+        send recommendations at random times during the baseline period
+        artificial recomms only sent if in the acceptable time interval and no recomm already in prog
+        each iteration a new random time is selected
+        if the baseline period is over, this function returns
+        """
+
+        D_EVT = self.event_dimension  # dimension of event
+
+        #constantly call recommendations untill end of baseline period
+        while True:
+            try:
+                evt = np.zeros(D_EVT, dtype=int)
+
+                # sleep between 5 min to 2 hours till next recommendation
+                sleepfor = random.randint(360, 7200)
+                log('Next random baseline recommendation in', sleepfor // 60, 'minutes')
+                time.sleep(sleepfor)
+
+                #break loop when baseline period is over
+                if self.fulldeployment_ready():
+                    log('Baseline period is over. Random recommendations will no longer be sent.')
+                    break
+
+                #only send if in correct period and no recomm already in progress
+                if self.recomm_start and (not self.recomm_in_progress):
+                    log('Sending baseline random recommendation')
+                    self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=TRIGGERS_DICT[2]) #this is proactive
+                    #button handeled once you call dispatch
+
+            except Exception as err:
+                log('Baseline Random Recommendation Error', str(err))
+                self.email_alerts('Baseline random Recommendations', str(err), 'Failure in rand_recomm function',
+                                  'Possible sources of error: dispatch function does not have enough arguments',
+                                  urgent=False)
+            
+        return
+    
+    def proactive_recomm(self):
+        '''
+            This function will call rand_recomm function until baseline period is over
+
+            A day is split into morning, afternoon, and evening
+            at the start of each part of the day, check if a proactive recommendation should be sent
+
+            To determine if a proactive recommendation should be sent, check the logistic regression model
+
+            Randomly check if a positive affirmation message should be sent
+
+        '''
+        D_EVT = self.event_dimension  # dimension of event
+
+        #During Baseline, send out random baseline recommendations 
+        if not self.fulldeployment_ready():
+            self.rand_recomm()
+
+        # #make day shorter to give room for scheduled events
+        # adjusted_morn_delt = self.time_morn_delt + timedelta(minutes=30)
+        # adjusted_ev_delt = self.time_ev_delt - timedelta(minutes=30)
+
+        # #divide day into 4 periods
+        # periods = 4
+        # total_time = adjusted_ev_delt-adjusted_morn_delt
+        # time_periods = total_time/periods
+        # cutoff_periods_lst = []
+        # for i in range(1,periods+1):
+        #     cutoff_periods_lst.append(adjusted_morn_delt+time_periods*i)
+
+        # #get current hr and min
+        # hr_now = datetime.now().hour
+        # min_now = datetime.now().minute
+        # current_time_delt = timedelta(hours=hr_now,minutes=min_now)
+
+        
+        # #if we currently are starting before first period
+        # if (current_time_delt < adjusted_morn_delt):
+        #     #sleep till first period starts
+        #     time.sleep((adjusted_morn_delt - current_time_delt).total_seconds())
+        # else:
+        #     #sleep till the end of the day
+        #     time.sleep((timedelta(hours=23,minutes=59)-current_time_delt).total_seconds())
+        #     #sleep till the start period
+        #     time.sleep((adjusted_morn_delt-timedelta(hours=0,minutes=0)).total_seconds())
+
+        #Try to get the proactive model
+        try:
+            #run model and save
+            self.proactive_model = generate_proactive_models()
+            log('Successfully generated proactive model')
+        except Exception as err:
+            log('Unable to generate proactive model in proactive_recomm()',str(err))
+
+        send_proactive_answer = False #when true allow to send proactive message
+        current_trigger = TRIGGERS_DICT[4] #default: random
+
+        #After baseline period, check if a proactive recommendation should be sent
+        while True:
+            try:
+                
+                #try to send positive affirmation if not sent yet today
+                self.positive_affirmation()
+
+                #if we dont have model yet, just send random messages
+                if self.proactive_model == None: 
+                    log('Proactive Model not yet generated. Randomly sending proactive messages')
+                    # sleep between 5 min to 4 hours till next artificial recommendation
+                    sleepfor = random.randint(360, 14400)
+                    log('Next random proactive recommendation in', sleepfor // 60, 'minutes')
+                    time.sleep(sleepfor)
+                    #allow for proactive recomm to be sent 
+                    send_proactive_answer = True
+                    #set trigger to random
+                    current_trigger = TRIGGERS_DICT[4]
+                #usual case
+                else:
+                    #check if model says to send recommendation during this period
+                    current_hour = int(datetime.now().hour)
+                    success, send_proactive = get_proactive_prediction(current_hour,self.proactive_model)
+
+                    #if successfully got answer and answer is 1
+                    if success and (send_proactive == 1):
+                        #allow to be sent
+                        send_proactive_answer = True
+                        #set trigger to proactive model
+                        current_trigger = TRIGGERS_DICT[3]
+                    #if successfull got answer and answer is 0 or None (getting prediction was a failure)
+                    elif (send_proactive == 0) or (send_proactive == None):
+                        #if don't sent, randomly check if recomm should be sent .5 prob
+                        log('Proactive model predicted 0 thus randomly choosing...')
+                        send_proact_recomm = random.randint(0,1)
+
+                        #check if 1 was chosen
+                        if send_proact_recomm == 1:
+                            #allow to be sent
+                            send_proactive_answer = True
+                            #set trigger to random
+                            current_trigger = TRIGGERS_DICT[4]
+
+                #only send proactive if allowed
+                if send_proactive_answer:
+                #only send if in correct period and no recomm already in progress
+                    if self.recomm_start and (not self.recomm_in_progress):
+                        log('Sending proactive recommendation')
+                        evt = np.zeros(D_EVT, dtype=int)
+                        #not reactive. proactive
+                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=current_trigger) 
+                        #button handled once you call dispatch
+                        
+                send_proactive_answer = False #reset
+
+                #sleep till next hour. Check every hour of the day
+                check_every = 3600
+                log('Sleeping for',3600//60,'minutes before checking proactive model again')
+                time.sleep(check_every)
+
+            except Exception as err:
+                log('Proactive Recommendation Error', str(err))
+                self.email_alerts('Proactive Recommendations', str(err), 'Failure in proactive_recomm function',
+                                  'Possible sources of error: model, division of day',
+                                  urgent=False)
+    
+    def positive_affirmation(self):
+        '''
+            When called, randomly pick if message should be sent
+            If so, pick random wait time
+            Pick random positive affirmation message
+            Send positive affirmation message Only once and Poll time is 20 minutes
+            Send blank message (no missed messages)
+        '''
+        #randomly choose if message should be sent
+        send_pos_affirmation = [True, False]
+        #likelyhood 
+        send_prob = [.6,.4]
+        #randomly pick
+        rand_pick = (random.choices(send_pos_affirmation,send_prob))[0] #bc returns val in list
+    
+        try:
+            if rand_pick:
+                #pick amount of time to sleep 0 to 2 hours  
+                sleepfor = random.randint(0, 7200)
+                log('Positive affirmation is planned to be sent in', sleepfor // 60, 'minutes')
+                time.sleep(sleepfor)
+
+                #no other aff msgs sent today, correct period, and no other messages in progress
+                if (self.num_sent_affirmation_msgs == 0) and self.recomm_start and (not self.recomm_in_progress):
+                    
+                    #recommendation can over ride this positve affirmation message
+                    self.need_button_on = False #button must be off now
+                    #button polling is stopped from call_poll_ema function
+
+                    #choose message
+                    message_number = random.randint(1, 72)
+                    message = 'daytime:affirmation:'+str(message_number)
+
+                    self.num_sent_affirmation_msgs+=1 #increase count
+                    log('Sending positive affirmation message')
+
+                    #treat as request button to avoid sending missed message, sent only once. Poll time is 20 minutes
+                    affirmation_answer = self.call_poll_ema(message, all_answers=True,ifmissed='missed:recomm:1',phonealarm=self.emaTrue,request_button=True,poll_time=1200)  
+
+                    if self.recomm_start and (not self.recomm_in_progress):
+                        #send blank message
+                        _ = call_ema('9', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
+                        self.stop_questions = False  # reset anyways (will never be set to true because message does not have missed message)
+                        self.need_button_on = True #allow button to be turend on 
+                        #no need to reset recomm_in_progress bc this is not a recommendation
+                else:
+                    log('Positive affirmation chosen but not sent. Requirements not met.')
+            else:
+                log('Positive affirmation was not chosen to be sent')
+        except Exception as err:
+            log('Positive Affirmation Error', str(err))
+            self.email_alerts('Positive Affirmation Message', str(err), 'Failure in the positive_affirmation function',
+                                  'Possible sources of error: overlap with button or other message',
+                                  urgent=False)
+        
+
     def extract_deploy_info(self):
+        '''
+            When recommender system starts, must get information about this deployment 
+
+            First: retrieve start/end time, caregiver/caregivee name, and home id from DeploymentInformation.db
+
+            Next: Call function to check if this deployment is a restart or a new deployment
+
+        '''
         # default just in case
         moring_time = self.time_morn_delt
         evening_time = self.time_ev_delt
@@ -989,7 +1605,7 @@ class Recommender:
                 if not os.path.isfile(depl_info_path):
                     #if file not found, check hard drive
                     depl_info_path = 'D:/Patient-Caregiver-Relationship/Patient-Caregiver-Relationship/DeploymentInformation.db'
-                #when no file is found error thrown and urgent message sent
+                #when no file is found error thrown and urgent message sent 
 
             con = None
             con = sqlite3.connect(depl_info_path)
@@ -1001,7 +1617,7 @@ class Recommender:
             cursorObj.execute("SELECT * FROM " + table_name +
                               " ORDER BY CREATED_DATE DESC LIMIT 1, 1")
 
-            # extract start time and end time
+            # extract start time and end time from deploymentinformation.db
             start_row, end_row = cursorObj.fetchall()[0][11:13]
             start_hour, start_minute = [int(t) for t in start_row.split(':')]
             end_hour, end_minute = [int(t) for t in end_row.split(':')]
@@ -1044,7 +1660,7 @@ class Recommender:
             log('InformationDeployment.db time read successfully')
 
         except Exception as e:
-            log('Read SQLite DB error:', e, timer=self.timer)
+            log('Read SQLite DB error:', str(e), timer=self.timer)
             self.email_alerts('DeploymentInformation.db', str(e),
                               'Extraction of Deployment Information Failure: Start/End time, Names, or Homeid',
                               'DeploymentInformation.db path or contents should be investigated', urgent=True)
@@ -1053,6 +1669,125 @@ class Recommender:
                 con.close()
 
         return
+
+    def savedDeployments(self,check_for_prev=False,update_baseline_period=False):
+        """
+        if check_for_prev is true:
+        check if system is being restarted for the same deployment
+        if system is being restarted for the same deployment:
+            - update baseline period from previous deployment baseline period left
+            - update start/end time from previous deployment
+            - update max_messages from previous deployment
+
+        if update_baseline_period is true
+            baseline time updated in recomm_saved_memory (called from scheduled events each evening and morning)
+            recomm_saved_memory will always have one row
+            baseline periodleft is stored in seconds, if baseline period was over, 0 is stored
+            save start/end time
+            save max messages
+        """
+        global BASELINE_TIME, MAX_MESSAGES
+
+        #at the start of the deployment check if you need to update the baseline time to make it shorter
+        if check_for_prev:
+
+            #default
+            baseline_time_left = BASELINE_TIME
+
+            #retrieve saved data from recomm_saved_memory table
+            try:
+                db = get_conn()
+                cursor = db.cursor()
+
+                query = "SELECT deploymentID, baselineTimeLeft, morningStartTime, eveningEndTime, maxMessages FROM recomm_saved_memory"
+                data = cursor.execute(query)
+                mystoredData = cursor.fetchone()  #fetches first row of the record
+
+                #save information from table
+                prev_home_id = mystoredData[0]
+                prev_base_time_left = mystoredData[1]
+                prev_morn_starttime = mystoredData[2]
+                prev_ev_endtime = mystoredData[3]
+                prev_maxMessages = mystoredData[4]
+
+                # check if this is a continuation of a previous deployment
+                if prev_home_id == (str(self.home_id)).strip():
+                    # update baseline time just in case we need it in future
+                    BASELINE_TIME = int(float((prev_base_time_left).strip()))  # incase string was a float
+                    # set the time period left
+                    baseline_time_left = BASELINE_TIME
+                    # replace baseline time with the last known baseline time left from prev deployment
+                    self.baseline_period = timedelta(seconds=BASELINE_TIME)
+
+                    #Update morn and ev time from prev deployment (no need to add 30 min to a min already done from prev depl)
+                    #read in time string to datetime object
+                    morn_t = datetime.strptime(prev_morn_starttime,"%H:%M:%S") #must be in this format if restart
+                    ev_t = datetime.strptime(prev_ev_endtime,"%H:%M:%S") #must be in this format if restart
+
+                    #built time delta from datetime object
+                    self.time_morn_delt = timedelta(hours=morn_t.hour, minutes=morn_t.minute)
+                    self.time_ev_delt = timedelta(hours=ev_t.hour, minutes=ev_t.minute)
+
+                    #Update max messages from previous deployment
+                    MAX_MESSAGES = int(prev_maxMessages)
+
+                    log('-- -- -- -- -- -- Recommender System Start -- -- -- -- -- --')
+                    log(f'This deployment is a restart, baseline period updated to previous: {self.baseline_period}')
+                else:
+                    log(f'This is a new deployment, baseline period: {self.baseline_period}')
+                    #add the date this deployment was first started
+                    #insert to the first row of the table!! (assuming always only one row)
+                    update_query = "UPDATE recomm_saved_memory SET FirstStartDate = %s LIMIT 1"
+                    # change time to date time format
+                    startDate = str(datetime.fromtimestamp(int(time.time())))
+                    # no matter what just update the table with new deployment information or the remaining baseline time (baseline time is the period in seconds)
+                    cursor.execute(update_query,startDate)
+                    db.commit()
+                    log(f'recomm_saved_memory table start date set')
+
+            except Exception as err:
+                log('savedDeployments Error', str(err))
+                self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, select query',
+                                  'Possible sources of error: no row exists, format issue, BASELINE_TIME, comparing issue, prev ev/morn time incorrect format, prev max messages not int',
+                                  urgent=True)
+                db.rollback()
+            finally:
+                db.close()
+        elif update_baseline_period:
+            # calculate amount of baseline time left (in seconds)
+            baseline_time_left = int((self.baseline_period).total_seconds()) - int((self.timer.now() - self.baseline_start).total_seconds())
+
+            if baseline_time_left <= 0:
+                baseline_time_left = 0
+
+
+        #in any case update the table with either new data or updated data
+        if check_for_prev or update_baseline_period:
+            #insert homeid, baselinetimeleft, current time, morntime, evtime, and maxmessage to recomm_saved_memory table
+            try:
+                db = get_conn()
+                cursor = db.cursor()
+
+                #insert to the first row of the table!! (assuming always only one row)
+                update_query = "UPDATE recomm_saved_memory SET deploymentID = %s, baselineTimeLeft = %s, lastUpdated = %s, morningStartTime = %s, eveningEndTime = %s, maxMessages = %s LIMIT 1"
+
+                # change time to date time format
+                update_time = str(datetime.fromtimestamp(int(time.time())))
+
+                # no matter what just update the table with new deployment information or the remaining baseline time (baseline time is the period in seconds)
+                cursor.execute(update_query,(str(self.home_id),str(baseline_time_left),update_time,str(self.time_morn_delt),str(self.time_ev_delt),MAX_MESSAGES))
+                db.commit()
+
+                log(f'recomm_saved_memory table updated. Baseline period remaining: {baseline_time_left} seconds')
+
+            except Exception as err:
+                log('savedDeployments Error', str(err))
+                self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, update query',
+                                  'Possible sources of error: no row exists, format issue, baseline_time_left',
+                                  urgent=True)
+                db.rollback()
+            finally:
+                db.close()
 
     def email_alerts(self, source='', error='', message='', explanation='', urgent=False, scheduled_alert=False):
         # Default for all messages
@@ -1101,229 +1836,9 @@ class Recommender:
                 log('Email alert stored to send later')
 
         except Exception as e:
-            log('Email Alert error:', e)
+            log('Email Alert error:', str(e))
 
         return
 
-
-    def baseline_recomm(self, speaker_id):
-        """
-        recommendation messages for baseline period
-        :param speaker_id:
-        """
-        global MESSAGES_SENT_TODAY
-
-        try:
-            self.recomm_in_progress = True  # now in progress
-            MESSAGES_SENT_TODAY += 1 #increase count
-            self.last_action_time = self.timer.now() #start cooldown
-
-            # # baseline detection confirm
-            message = 'baseline:recomm:binaryconfirm:1'
-            answer_bank = [1.0, 0.0, -1.0]
-            # ask if feeling angy yes/no, first question alarm on
-            baseline_confirmans = self.call_poll_ema(message, answer_bank, speaker_id, acoust_evt=True,
-                                                     phonealarm=self.emaTrue, ifmissed='missed:recomm:1')
-
-            message = 'baseline:recomm:likertconfirm:1'
-            likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
-                                               acoust_evt=True, ifmissed='missed:recomm:1')  # 0 -1.0 or any number on scale
-
-            #dont send if scheduled events have interrupted
-            if self.recomm_start:
-                # when a message isnt answered (missed)
-                if self.stop_questions:
-                    # in order to send this message
-                    self.stop_questions = False  # reset
-                    #dont send message, just keep the missed message up
-                else:
-                    # send the blank message after everything for both morning and evening messages-------------
-                    _ = call_ema('1', '995', alarm=self.emaFalse, test=self.test_mode)  # send directly even if stop questions
-
-            log('Baseline Recommendation Messages Sent')
-
-        except Exception as err:
-            log('Baseline Recommendation Confirmation Error', err)
-            self.email_alerts('Baseline Recommendation', str(err), 'Failure in baseline_recomm function',
-                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
-                              urgent=False)
-        finally:
-            self.stop_questions = False  # reset
-            self.recomm_in_progress = False  # reset
-
-        return
-
-
-    def baseline_schedule_evt(self,event_id):
-        """
-        scheduled events for the baseline period
-
-        :param event_id: specifies the event 'evening message' or 'morning message'
-        """
-        global MESSAGES_SENT_TODAY
-
-        try:
-            #evening messages for baseline
-            if event_id == 'evening message':
-                self.recomm_start = False  # recomm should not be sent anymore
-                self.stop_questions = False #allow new messages to be sent incase it was never reset
-                MESSAGES_SENT_TODAY = 0  # reset messages to 0
-
-                # baseline likert evening questions
-                likertlst = ['likertstress:1', 'likertlonely:1', 'likerthealth:1', 'likerthealth:2','likertinteractions:1']
-                # shuffle the list
-                random.shuffle(likertlst)
-                i = 0
-                # send all likert questions in a random order
-                while i < len(likertlst):
-                    # only make the phone ring on the first quesiton
-                    alarmsetting = self.emaFalse
-                    if i == 0:
-                        alarmsetting = self.emaTrue
-                    message = 'baseline:evening:' + likertlst[i]
-                    answer = self.call_poll_ema(message, all_answers=True,phonealarm=alarmsetting, ifmissed='missed:evening:1')  # slide bar, 0, or -1.0
-                    # increment count
-                    i += 1
-
-                #blank message handled in scheduled events function 
-
-                log('Baseline Evening Messages Sent')
-
-        except Exception as err:
-            log('Baseline Scheduled Events Error', err)
-            self.email_alerts('Baseline Scheduled Events', str(err), 'Failure in baseline_schedule_evt function',
-                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
-                              urgent=False)
-
-        return
-
-    def randrecomm_testing(self):
-        """
-        for testing purposes, send artificial recommendations at random times
-        artificial recomms only sent if in the acceptable time interval and no recomm already in prog
-        artificial recomms will be activated for the day if 0 recomm messages set by random time
-        each iteration a new random time is selected
-        """
-
-        D_EVT = 5  # dimension of event
-
-        #constantly call recommendations
-        while True:
-            try:
-                evt = np.random.randn(D_EVT)
-
-                # sleep between 5 min to 7 hours till next artificial recommendation
-                sleepfor = random.randint(360, 25200)
-                log('Next artificial random recommendation in', sleepfor // 60, 'minutes')
-                time.sleep(sleepfor)
-
-                #only send if in correct period and no recomm already in progress
-                if self.recomm_start and (not self.recomm_in_progress):
-                    #also only send if no messages have been sent or artificial recomm already activated for the day
-                    if (MESSAGES_SENT_TODAY == 0) or (self.artif_recomm_activated):
-                        #if no messages by random time
-                        if MESSAGES_SENT_TODAY == 0:
-                            #activate artificial recommendation for the day
-                            self.artif_recomm_activated = True
-                            log('Artificial random recomms activated for today since no recomms have been sent yet')
-
-                        log('Sending artificial random recommendation')
-                        self.dispatch(1, evt)
-
-            except Exception as err:
-                log('Artificial Random Recommendation Error', err)
-                self.email_alerts('Artificial random Recommendations', str(err), 'Failure in randrecomm_testing function',
-                                  'Possible sources of error: dispatch function does not have enough arguments',
-                                  urgent=False)
-
-        return
-
-    def savedDeployments(self,check_for_prev=False,update_baseline_period=False):
-        """
-        if check_for_prev is true:
-        check if system is being restarted for the same deployment
-        if system is being restarted for the same deployment, update baseline period from previous deployment baseline period left
-
-        if update_baseline_period is true
-        baseline time updated in recomm_saved_memory (called from scheduled events each evening and morning)
-        recomm_saved_memory will always have one row
-        baseline periodleft is stored in seconds, if baseline period was over, 0 is stored
-        """
-        global BASELINE_TIME
-
-        #at the start of the deployment check if you need to update the baseline time to make it shorter
-        if check_for_prev:
-
-            #default
-            baseline_time_left = BASELINE_TIME
-
-            #retrieve saved data from recomm_saved_memory table
-            try:
-                db = get_conn()
-                cursor = db.cursor()
-
-                query = "SELECT deploymentID, baselineTimeLeft FROM recomm_saved_memory"
-                data = cursor.execute(query)
-                mystoredData = cursor.fetchone()  #fetches first row of the record
-
-                #save information from table
-                prev_home_id = mystoredData[0]
-                prev_base_time_left = mystoredData[1]
-
-                # check if this is a continuation of a previous deployment
-                if prev_home_id == (str(self.home_id)).strip():
-                    # update baseline time just in case we need it in future
-                    BASELINE_TIME = int(float((prev_base_time_left).strip()))  # incase string was a float
-                    # set the time period left
-                    baseline_time_left = BASELINE_TIME
-                    # replace baseline time with the last known baseline time left from prev deployment
-                    self.baseline_period = timedelta(seconds=BASELINE_TIME)
-                    log(f'This deployment is a restart, baseline period updated to previous: {self.baseline_period}')
-                else:
-                    log(f'This is a new deployment, baseline period: {self.baseline_period}')
-
-            except Exception as err:
-                log('savedDeployments Error', err)
-                self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, select query',
-                                  'Possible sources of error: no row exists, format issue, BASELINE_TIME, comparing issue',
-                                  urgent=True)
-                db.rollback()
-            finally:
-                db.close()
-        elif update_baseline_period:
-            # calculate amount of baseline time left (in seconds)
-            baseline_time_left = int((self.baseline_period).total_seconds()) - int((self.timer.now() - self.baseline_start).total_seconds())
-
-            if baseline_time_left <= 0:
-                baseline_time_left = 0
-
-
-        #in any case update the table with either new data or updated data
-        if check_for_prev or update_baseline_period:
-            #insert homeid, baselinetimeleft and current time to recomm_saved_memory table
-            try:
-                db = get_conn()
-                cursor = db.cursor()
-
-                #insert to the first row of the table!! (assuming always only one row)
-                update_query = "UPDATE recomm_saved_memory SET deploymentID = %s, baselineTimeLeft = %s, lastUpdated = %s LIMIT 1"
-
-                # change time to date time format
-                update_time = str(datetime.fromtimestamp(int(time.time())))
-
-                # no matter what just update the table with new deployment information or the remaining baseline time (baseline time is the period in seconds)
-                cursor.execute(update_query,(str(self.home_id),str(baseline_time_left),update_time))
-                db.commit()
-
-                log(f'recomm_saved_memory table updated. Baseline period remaining: {baseline_time_left} seconds')
-
-            except Exception as err:
-                log('savedDeployments Error', err)
-                self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, update query',
-                                  'Possible sources of error: no row exists, format issue, baseline_time_left',
-                                  urgent=True)
-                db.rollback()
-            finally:
-                db.close()
 
 
