@@ -6,18 +6,17 @@ from pkg.alg import MultiLinUCB
 
 PORT = 8000
 
-ctx_size = 5
-n_choices = 3
+ctx_size = 6
+n_choices = 22
 n_tasks = 4
 alpha = 3.
 
 model = MultiLinUCB(ctx_size + n_choices, n_choices, n_tasks, alpha=alpha)
 
-def act(task, ctx, return_ucbs):
+def act(task, ctx, return_ucbs=False, subset=None):
   print(f'request recommendation from client #{task}:', ctx)
-  res = model.act(task, np.array(ctx), return_ucbs=return_ucbs)
+  res = model.act(task, np.array(ctx), return_ucbs=return_ucbs, subset=subset)
   print(f'model gives action {res[0]} to client #{task}')
-
   return res
 
 def update(task, ctx, choice, reward):

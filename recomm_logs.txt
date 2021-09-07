@@ -1,0 +1,360 @@
+[RECOMM] 2021-09-07 04:28:34     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:28:34     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:28:34     Client ID: 0
+[RECOMM] 2021-09-07 04:28:34     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:28:34     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:28:34     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:28:34     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:28:34     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:28:34     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:28:34     Positive affirmation was not chosen to be sent
+[RECOMM] 2021-09-07 04:28:34     Proactive Model not yet generated. Randomly sending proactive messages
+[RECOMM] 2021-09-07 04:28:34     Next random proactive recommendation in 270 minutes
+[RECOMM] 2021-09-07 04:28:37     recommender receives event: [0.25823553 1.63895841 0.02322964 0.28063008 0.06864351 0.12431784]
+[RECOMM] 2021-09-07 04:32:47     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:32:47     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:32:47     Client ID: 0
+[RECOMM] 2021-09-07 04:32:47     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:32:47     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:32:47     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:32:48     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:32:48     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:32:48     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:32:48     Positive affirmation was not chosen to be sent
+[RECOMM] 2021-09-07 04:32:48     Proactive Model not yet generated. Randomly sending proactive messages
+[RECOMM] 2021-09-07 04:32:48     Next random proactive recommendation in 177 minutes
+[RECOMM] 2021-09-07 04:32:51     recommender receives event: [-0.16770351 -0.17256142  1.50488188 -0.49975056 -0.44382977  0.35910909]
+[RECOMM] 2021-09-07 04:32:51     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:32:51     model gives action 21
+[RECOMM] 2021-09-07 04:32:57     Stored connection error in reward_data table
+[RECOMM] 2021-09-07 04:32:57     Call_ema or Poll_ema Error <urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>
+[RECOMM] 2021-09-07 04:32:58     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 04:33:18     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:33:18     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:33:18     Client ID: 0
+[RECOMM] 2021-09-07 04:33:18     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:33:18     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:33:18     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:33:19     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:33:19     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:33:19     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:33:19     Positive affirmation was not chosen to be sent
+[RECOMM] 2021-09-07 04:33:19     Proactive Model not yet generated. Randomly sending proactive messages
+[RECOMM] 2021-09-07 04:33:19     Next random proactive recommendation in 299 minutes
+[RECOMM] 2021-09-07 04:33:22     recommender receives event: [-2.27887628 -0.28508865  0.08331087 -0.0363784   1.56332981  0.68098436]
+[RECOMM] 2021-09-07 04:33:22     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:33:22     model gives action 20
+[RECOMM] 2021-09-07 04:33:29     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 04:33:37     action sent #id 999|163100361422
+[RECOMM] 2021-09-07 04:33:48     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:33:48     reward retrieved 0.0
+[RECOMM] 2021-09-07 04:35:17     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:35:17     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:35:17     Client ID: 0
+[RECOMM] 2021-09-07 04:35:17     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:35:17     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:35:17     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:35:17     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:35:17     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:35:17     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:35:18     Positive affirmation was not chosen to be sent
+[RECOMM] 2021-09-07 04:35:18     Proactive Model not yet generated. Randomly sending proactive messages
+[RECOMM] 2021-09-07 04:35:18     Next random proactive recommendation in 0 minutes
+[RECOMM] 2021-09-07 04:35:18     Sending proactive recommendation
+[RECOMM] 2021-09-07 04:35:18     recommender receives event: [0 0 0 0 0 0]
+[RECOMM] 2021-09-07 04:35:18     Proactive trigger accepted
+[RECOMM] 2021-09-07 04:35:18     Sleeping for 60 minutes before checking proactive model again
+[RECOMM] 2021-09-07 04:35:18     model gives action 9
+[RECOMM] 2021-09-07 04:35:26     action sent #id 999|163100372338
+[RECOMM] 2021-09-07 04:35:28     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 04:35:33     recommender receives event: [-1.4045007   0.08491438  2.24745964  1.64010894 -2.28902899  1.06042576]
+[RECOMM] 2021-09-07 04:35:33     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:35:33     recommendation event in progress haulted to allow new recommendation
+[RECOMM] 2021-09-07 04:35:33     model gives action 19
+[RECOMM] 2021-09-07 04:35:34     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:35:34     retrieve no reward for #id: 999|163100372338
+[RECOMM] 2021-09-07 04:36:22     action sent #id 999|163100376392
+[RECOMM] 2021-09-07 04:36:35     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:36:35     reward retrieved 0.0
+[RECOMM] 2021-09-07 04:38:54     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:38:54     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:38:54     Client ID: 0
+[RECOMM] 2021-09-07 04:38:54     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:38:54     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:38:54     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:38:54     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:38:54     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:38:54     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:38:54     Positive affirmation was not chosen to be sent
+[RECOMM] 2021-09-07 04:38:54     Proactive Model not yet generated. Randomly sending proactive messages
+[RECOMM] 2021-09-07 04:38:54     Next random proactive recommendation in 0 minutes
+[RECOMM] 2021-09-07 04:38:54     Sending proactive recommendation
+[RECOMM] 2021-09-07 04:38:54     recommender receives event: [0 0 0 0 0 0]
+[RECOMM] 2021-09-07 04:38:54     Proactive trigger accepted
+[RECOMM] 2021-09-07 04:38:54     Sleeping for 60 minutes before checking proactive model again
+[RECOMM] 2021-09-07 04:38:54     model gives action 11
+[RECOMM] 2021-09-07 04:39:04     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 04:39:09     recommender receives event: [-0.0997927   0.93711634 -1.44000244  0.06513415 -0.56310679  1.03466541]
+[RECOMM] 2021-09-07 04:39:10     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:39:10     recommendation event in progress haulted to allow new recommendation
+[RECOMM] 2021-09-07 04:39:10     model gives action 10
+[RECOMM] 2021-09-07 04:39:10     no empathid, action not send
+[RECOMM] 2021-09-07 04:39:10     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:39:35     action sent #id 999|163100396817
+[RECOMM] 2021-09-07 04:39:45     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:39:45     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:41:05     recommender receives event: [ 0.65732997 -0.25380848 -0.08804463  1.59983805  0.9143134   0.89208601]
+[RECOMM] 2021-09-07 04:41:05     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:41:05     model gives action 10
+[RECOMM] 2021-09-07 04:43:00     recommender receives event: [-0.0634758   0.01524551 -1.92663388  0.36927879 -0.65218928  2.02987087]
+[RECOMM] 2021-09-07 04:43:01     Reactive trigger. Recommender has priority group {GROUPS_QUEUE[0]} in service. Reactive event rejected
+[RECOMM] 2021-09-07 04:43:01     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:43:41     action sent #id 999|163100421385
+[RECOMM] 2021-09-07 04:44:00     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:44:00     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:46:39     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:46:39     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:46:39     Client ID: 0
+[RECOMM] 2021-09-07 04:46:39     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:46:39     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:46:39     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:46:39     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:46:39     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:46:39     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:46:39     Positive affirmation was not chosen to be sent
+[RECOMM] 2021-09-07 04:46:39     Proactive Model not yet generated. Randomly sending proactive messages
+[RECOMM] 2021-09-07 04:46:39     Next random proactive recommendation in 0 minutes
+[RECOMM] 2021-09-07 04:46:39     Sending proactive recommendation
+[RECOMM] 2021-09-07 04:46:39     recommender receives event: [0 0 0 0 0 0]
+[RECOMM] 2021-09-07 04:46:39     Proactive trigger accepted
+[RECOMM] 2021-09-07 04:46:39     Sleeping for 60 minutes before checking proactive model again
+[RECOMM] 2021-09-07 04:46:40     model gives action 10
+[RECOMM] 2021-09-07 04:46:49     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 04:46:54     recommender receives event: [ 0.74549197 -1.05940407  0.1184957  -0.11575173  0.52647196 -0.75641536]
+[RECOMM] 2021-09-07 04:46:55     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:46:55     recommendation event in progress haulted to allow new recommendation
+[RECOMM] 2021-09-07 04:46:56     model gives action 12
+[RECOMM] 2021-09-07 04:46:56     no empathid, action not send
+[RECOMM] 2021-09-07 04:46:56     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:47:28     action sent #id 999|163100444182
+[RECOMM] 2021-09-07 04:47:41     recommender receives event: [-0.75749094  0.99330605 -1.57787089 -0.021643    1.70078423  0.87915637]
+[RECOMM] 2021-09-07 04:47:41     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:47:42     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:47:42     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:47:42     model gives action 8
+[RECOMM] 2021-09-07 04:47:42     Lost remote server connection, switch to local service
+[RECOMM] 2021-09-07 04:48:03     no empathid, action not send
+[RECOMM] 2021-09-07 04:48:03     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:48:27     recommender receives event: [ 0.24498094  0.01030127 -0.74430845 -1.4378886   0.70317456 -0.62942537]
+[RECOMM] 2021-09-07 04:48:27     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:48:27     Rebuild remote server connection, switch to remote service
+[RECOMM] 2021-09-07 04:48:27     model gives action 17
+[RECOMM] 2021-09-07 04:49:12     recommender receives event: [ 1.99557117 -1.32515332 -0.01457082  1.44058698 -0.83684038 -1.66106844]
+[RECOMM] 2021-09-07 04:49:12     Reactive trigger. Recommender has priority group {current_group} in service. Reactive event rejected
+[RECOMM] 2021-09-07 04:49:13     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:49:32     action sent #id 999|163100456908
+[RECOMM] 2021-09-07 04:49:41     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:49:41     reward retrieved 0.0
+[RECOMM] 2021-09-07 04:49:58     recommender receives event: [-1.21753638 -0.3752336   0.85304734 -2.07653502  1.11237741  0.30166677]
+[RECOMM] 2021-09-07 04:49:58     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:49:58     model gives action 11
+[RECOMM] 2021-09-07 04:50:26     action sent #id 999|163100462092
+[RECOMM] 2021-09-07 04:50:36     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:50:36     reward retrieved 0.0
+[RECOMM] 2021-09-07 04:50:43     recommender receives event: [-0.83265923  0.29097582  0.18216846 -0.878827   -0.93437273  1.01073538]
+[RECOMM] 2021-09-07 04:50:43     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:50:43     model gives action 14
+[RECOMM] 2021-09-07 04:53:36     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 04:53:36     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 04:53:36     Client ID: 0
+[RECOMM] 2021-09-07 04:53:36     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 04:53:36     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 04:53:36     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 04:53:36     Scheduled Events Initialized
+[RECOMM] 2021-09-07 04:53:36     Sleep till next schedule event: 2021-09-07 22:30:00
+[RECOMM] 2021-09-07 04:53:36     Successfully generated proactive model
+[RECOMM] 2021-09-07 04:53:36     Positive affirmation is planned to be sent in 69 minutes
+[RECOMM] 2021-09-07 04:53:46     Placing recommendation request button on screen
+[RECOMM] 2021-09-07 04:53:51     recommender receives event: [ 0.16717813 -0.44408257  0.29033226 -0.19064704 -0.33807586 -1.81119944]
+[RECOMM] 2021-09-07 04:53:51     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:53:51     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 04:53:52     model gives action 4
+[RECOMM] 2021-09-07 04:54:02     action sent #id 999|163100483975
+[RECOMM] 2021-09-07 04:54:12     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:54:12     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:54:22     recommender receives event: [-0.62543569  0.11780597 -0.99626816  0.79294897 -0.17647496  0.48364694]
+[RECOMM] 2021-09-07 04:54:22     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:54:22     model gives action 16
+[RECOMM] 2021-09-07 04:54:33     action sent #id 999|163100487112
+[RECOMM] 2021-09-07 04:54:42     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:54:42     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:54:52     recommender receives event: [-0.3035625  -0.07925782 -0.16026001 -1.99681406  0.69979607  0.26183962]
+[RECOMM] 2021-09-07 04:54:52     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:54:52     model gives action 3
+[RECOMM] 2021-09-07 04:55:04     action sent #id 999|163100490104
+[RECOMM] 2021-09-07 04:55:13     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:55:13     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:55:22     recommender receives event: [-0.93385402 -0.31616183 -0.92335957  0.85566992  0.49460208  0.20998323]
+[RECOMM] 2021-09-07 04:55:25     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:55:25     model gives action 10
+[RECOMM] 2021-09-07 04:55:55     recommender receives event: [ 2.01119103  0.10245666  0.12865895  0.34041302 -0.63137003  0.40003912]
+[RECOMM] 2021-09-07 04:55:55     Reactive trigger. Recommender has priority group 1 in service. Reactive event rejected
+[RECOMM] 2021-09-07 04:55:55     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:56:18     action sent #id 999|163100497041
+[RECOMM] 2021-09-07 04:56:26     recommender receives event: [ 1.31351266  1.22266708  0.20257155 -0.3435506   0.72053521  0.54939353]
+[RECOMM] 2021-09-07 04:56:26     Reactive trigger. Recommender has priority group 1 in service. Reactive event rejected
+[RECOMM] 2021-09-07 04:56:27     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:56:27     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:56:27     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:56:57     recommender receives event: [ 1.2067066   0.40847783 -0.42961936 -0.87864736  1.38190604  1.81889005]
+[RECOMM] 2021-09-07 04:56:57     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:56:57     model gives action 16
+[RECOMM] 2021-09-07 04:57:07     action sent #id 999|163100502439
+[RECOMM] 2021-09-07 04:57:17     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:57:17     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:57:27     recommender receives event: [-1.2619771   0.53413117  0.61381062  0.22350719  0.29479525  0.02699894]
+[RECOMM] 2021-09-07 04:57:27     Reactive trigger accepted
+[RECOMM] 2021-09-07 04:57:28     model gives action 8
+[RECOMM] 2021-09-07 04:57:54     action sent #id 999|163100506956
+[RECOMM] 2021-09-07 04:57:58     recommender receives event: [-2.78794851  1.53640907 -1.19216737 -0.60582284  0.56821065 -2.16277288]
+[RECOMM] 2021-09-07 04:57:58     Reactive trigger. Recommender has priority group 1 in service. Reactive event rejected
+[RECOMM] 2021-09-07 04:57:58     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:58:05     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 04:58:05     reward retrieved 1.0
+[RECOMM] 2021-09-07 04:58:29     recommender receives event: [-1.32914248 -0.36477765 -0.90741133 -1.90915816 -1.54067274 -1.93265295]
+[RECOMM] 2021-09-07 04:58:29     Reactive Trigger. Reactive messages sent today 6 >= max reactive messages 6. Reactive event rejected
+[RECOMM] 2021-09-07 04:58:29     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:01:29     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 05:01:30     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 05:01:30     Client ID: 0
+[RECOMM] 2021-09-07 05:01:30     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 05:01:30     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 05:01:30     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 05:01:30     Scheduled Events Initialized
+[RECOMM] 2021-09-07 05:01:30     Sleep till next schedule event: 2021-09-07 05:02:00
+[RECOMM] 2021-09-07 05:01:30     Successfully generated proactive model
+[RECOMM] 2021-09-07 05:01:30     Positive affirmation is planned to be sent in 67 minutes
+[RECOMM] 2021-09-07 05:01:40     Placing recommendation request button on screen
+[RECOMM] 2021-09-07 05:01:45     recommender receives event: [ 0.51221126 -0.53125853  0.86344672 -1.23745957  0.31811499 -1.04613734]
+[RECOMM] 2021-09-07 05:01:45     Reactive trigger accepted
+[RECOMM] 2021-09-07 05:01:46     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 05:01:46     model gives action 15
+[RECOMM] 2021-09-07 05:02:00     no empathid, action not send
+[RECOMM] 2021-09-07 05:02:00     Event processing error: list assignment index out of range
+[RECOMM] 2021-09-07 05:02:00     Email alert stored to send later
+[RECOMM] 2021-09-07 05:02:16     recommender receives event: [ 0.93545994  1.52266464 -0.65428981 -0.78640575 -1.56283114 -0.83561663]
+[RECOMM] 2021-09-07 05:02:16     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:02:17     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:10:02     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 05:10:02     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 05:10:02     Client ID: 0
+[RECOMM] 2021-09-07 05:10:02     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 05:10:02     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 05:10:02     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 05:10:02     Scheduled Events Initialized
+[RECOMM] 2021-09-07 05:10:03     Sleep till next schedule event: 2021-09-07 05:11:00
+[RECOMM] 2021-09-07 05:10:03     Successfully generated proactive model
+[RECOMM] 2021-09-07 05:10:03     Positive affirmation is planned to be sent in 111 minutes
+[RECOMM] 2021-09-07 05:10:13     Placing recommendation request button on screen
+[RECOMM] 2021-09-07 05:10:18     recommender receives event: [-0.95707558  0.67194976  0.56065359 -0.15228563 -0.88144499  0.25586541]
+[RECOMM] 2021-09-07 05:10:18     Reactive trigger accepted
+[RECOMM] 2021-09-07 05:10:18     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 05:10:19     model gives action 6
+[RECOMM] 2021-09-07 05:10:49     recommender receives event: [-1.03461693  0.35300838  1.17440839  0.38051868  0.4492866  -0.12979367]
+[RECOMM] 2021-09-07 05:10:50     Reactive trigger. Recommender has priority group 1 in service. Reactive event rejected
+[RECOMM] 2021-09-07 05:10:51     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:11:00     no empathid, action not send
+[RECOMM] 2021-09-07 05:11:00     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:11:21     recommender receives event: [ 0.10595697 -2.98120381 -1.00008392 -1.12512002  0.11571983  1.70676258]
+[RECOMM] 2021-09-07 05:11:21     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:11:21     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:11:51     recommender receives event: [ 0.65314955 -0.86990386 -1.17560697  2.20883744  0.07527698 -1.42617412]
+[RECOMM] 2021-09-07 05:11:52     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:11:52     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:12:17     Scheduled event sent: evening message
+[RECOMM] 2021-09-07 05:12:19     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 05:12:20     Successfully updated proactive model after evening messages
+[RECOMM] 2021-09-07 05:12:20     Sleep till next schedule event: 2021-09-08 01:01:00
+[RECOMM] 2021-09-07 05:12:22     recommender receives event: [-1.32941325  0.62236985  0.11852209 -0.730962   -1.29313966  0.22659648]
+[RECOMM] 2021-09-07 05:12:22     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:12:22     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:15:33     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 05:15:33     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 05:15:33     Client ID: 0
+[RECOMM] 2021-09-07 05:15:33     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 05:15:33     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 05:15:33     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 05:15:33     Scheduled Events Initialized
+[RECOMM] 2021-09-07 05:15:33     Sleep till next schedule event: 2021-09-07 05:16:00
+[RECOMM] 2021-09-07 05:15:33     Successfully generated proactive model
+[RECOMM] 2021-09-07 05:15:33     Positive affirmation is planned to be sent in 72 minutes
+[RECOMM] 2021-09-07 05:15:43     Placing recommendation request button on screen
+[RECOMM] 2021-09-07 05:15:48     recommender receives event: [ 0.98484688  0.57268753  0.69737307 -0.53269338 -2.26614885  1.01807954]
+[RECOMM] 2021-09-07 05:15:50     Reactive trigger accepted
+[RECOMM] 2021-09-07 05:15:51     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 05:15:51     model gives action 21
+[RECOMM] 2021-09-07 05:16:00     no empathid, action not send
+[RECOMM] 2021-09-07 05:16:00     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:16:21     recommender receives event: [-0.95077353 -0.49542843 -1.4272238  -0.49849341 -0.74330973 -0.62929397]
+[RECOMM] 2021-09-07 05:16:22     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:16:23     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:16:53     recommender receives event: [-1.21186776 -0.35714039  1.04926422 -0.27418987  1.81793207  0.15135435]
+[RECOMM] 2021-09-07 05:16:54     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:16:56     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:17:26     recommender receives event: [-0.15488318 -2.7260389   0.43874561 -1.05403534 -0.05801922  0.68367738]
+[RECOMM] 2021-09-07 05:17:27     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:17:30     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:18:01     recommender receives event: [ 0.11229495  1.33906232 -1.80893848 -2.75161444  0.92787651  0.31623614]
+[RECOMM] 2021-09-07 05:18:01     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:18:02     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:18:26     Scheduled event sent: evening message
+[RECOMM] 2021-09-07 05:18:28     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 05:18:28     Successfully updated proactive model after evening messages
+[RECOMM] 2021-09-07 05:18:28     Sleep till next schedule event: 2021-09-08 01:01:00
+[RECOMM] 2021-09-07 05:18:32     recommender receives event: [-0.05365428  0.40800124  0.49382595  0.24583937 -0.19792712 -0.5356072 ]
+[RECOMM] 2021-09-07 05:18:32     Current time outside acceptable time interval or scheduled events in progress
+[RECOMM] 2021-09-07 05:18:33     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:19:00     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 05:19:00     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 05:19:00     Client ID: 0
+[RECOMM] 2021-09-07 05:19:00     This deployment is a restart, baseline period updated to previous: 0:00:00
+[RECOMM] 2021-09-07 05:19:00     recomm_saved_memory table updated. Baseline period remaining: 0 seconds
+[RECOMM] 2021-09-07 05:19:00     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 05:19:00     Scheduled Events Initialized
+[RECOMM] 2021-09-07 05:19:01     Successfully generated proactive model
+[RECOMM] 2021-09-07 05:19:01     Sleep till next schedule event: 2021-09-07 09:16:00
+[RECOMM] 2021-09-07 05:19:01     Positive affirmation is planned to be sent in 61 minutes
+[RECOMM] 2021-09-07 05:19:11     Placing recommendation request button on screen
+[RECOMM] 2021-09-07 05:19:20     Request button triggered recommendation
+[RECOMM] 2021-09-07 05:19:20     recommender receives event: [0 0 0 0 0 0]
+[RECOMM] 2021-09-07 05:19:20     Recommendation request button trigger accepted
+[RECOMM] 2021-09-07 05:19:20     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 05:19:20     model gives action 15
+[RECOMM] 2021-09-07 05:19:36     recommender receives event: [-0.06015179 -1.15166692  0.37411686 -1.54511802  0.74255185  0.07976398]
+[RECOMM] 2021-09-07 05:19:37     Reactive trigger. Recommender has priority group 2 in service. Reactive event rejected
+[RECOMM] 2021-09-07 05:19:38     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:19:55     action sent #id 999|163100638834
+[RECOMM] 2021-09-07 05:20:12     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:20:12     reward retrieved 0.0
+[RECOMM] 2021-09-07 05:21:13     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-09-07 05:21:13     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-09-07 05:21:13     Client ID: 0
+[RECOMM] 2021-09-07 05:21:13     This deployment is a restart, baseline period updated to previous: 2 days, 0:00:00
+[RECOMM] 2021-09-07 05:21:13     recomm_saved_memory table updated. Baseline period remaining: 172800 seconds
+[RECOMM] 2021-09-07 05:21:13     InformationDeployment.db time read successfully
+[RECOMM] 2021-09-07 05:21:13     Scheduled Events Initialized
+[RECOMM] 2021-09-07 05:21:14     Next random baseline recommendation in 265 minutes
+[RECOMM] 2021-09-07 05:21:14     Sleep till next schedule event: 2021-09-07 09:16:00
+[RECOMM] 2021-09-07 05:21:24     Placing recommendation request button on screen
+[RECOMM] 2021-09-07 05:21:31     Request button triggered recommendation
+[RECOMM] 2021-09-07 05:21:31     recommender receives event: [0 0 0 0 0 0]
+[RECOMM] 2021-09-07 05:21:31     Recommendation request button trigger accepted
+[RECOMM] 2021-09-07 05:21:31     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-09-07 05:21:37     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:21:37     Baseline Recommendation Messages Sent
+[RECOMM] 2021-09-07 05:21:37     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-09-07 05:21:49     recommender receives event: [-0.19325527 -0.20707434 -0.49609262 -0.81426009 -0.29194338  0.44619524]
+[RECOMM] 2021-09-07 05:21:49     Reactive trigger accepted
+[RECOMM] 2021-09-07 05:21:49     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-09-07 05:22:01     Recorded event in the ema_storing_data table
+[RECOMM] 2021-09-07 05:22:01     Baseline Recommendation Messages Sent

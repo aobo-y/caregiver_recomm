@@ -26,12 +26,11 @@ class MultiLinUCB(LinUCB):
       else:
         new_ctx = np.concatenate([new_ctx, np.zeros(self.raw_ctx_size)])
 
-
     return new_ctx
 
-  def act(self, task, ctx, **kargs):
+  def act(self, task, ctx, return_ucbs=False, subset=None):
     new_ctx = self.cvt_ctx(task, ctx)
-    choice = super().act(new_ctx, **kargs)
+    choice = super().act(new_ctx, return_ucbs=return_ucbs, subset=subset)
     return choice
 
   def update(self, task, ctx, choice, reward):

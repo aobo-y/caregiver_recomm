@@ -6,7 +6,7 @@ def log(*args, timer=None):
   print('[RECOMM]', f'{time}    ', *args)
 
   try:
-    with open('logs.txt','a+') as log_file:
+    with open('recomm_logs.txt','a+') as log_file:
       print('[RECOMM]', f'{time}    ', *args, file=log_file)
   except Exception as err:
     print('Unable to save logs in log.txt')

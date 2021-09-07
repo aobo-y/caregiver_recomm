@@ -14,13 +14,12 @@ class LinUCB:
       } for i in range(n_choices)
     ]
 
-  def act(self, ctx, return_ucbs=False,subset=None):
+  def act(self, ctx, return_ucbs=False, subset=None):
     ptas = []
 
     for arm in self.arms:
       AInv = np.linalg.inv(arm['A'])
       theta = AInv @ arm['b']
-
       mean = np.dot(theta, ctx)
       var = np.sqrt(ctx @ AInv @ ctx)
       pta = mean + self.alpha * var
@@ -52,7 +51,7 @@ class LinUCB:
 
     if return_ucbs:
       return choice, [float(n) for n in ptas]
-
+    
     return choice
 
   def update(self, ctx, choice, reward):
