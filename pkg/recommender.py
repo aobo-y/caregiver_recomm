@@ -671,7 +671,7 @@ class Recommender:
                                                 acoust_evt=True, ifmissed='missed:recomm:1',reactive_recomm=reactive, seq_key=sequence_key)  # return empath id
             #req_id is none when stop questions
 
-            #only updated if no conneciton error
+            #updated even with connection error to even out the rest of the day
             self.update_messages_sent(reactive)
 
         #if a missed question send the missed message
@@ -1214,8 +1214,15 @@ class Recommender:
                     self.email_alerts('call_ema or poll_ema error', str(e),'Failure in call_ema or poll_ema functions',
                                       'Connection Error, WinError failed attempt to make a connection with the phone after 2 attempts',
                                       urgent=False)
-                    raise
-                #btw conneciton errors are always stored in reward_data from call_ema()
+                    #raise #raise will block any data saving to be made
+
+                    #dont allow next messages to be sent since there is currently a connection issue
+                    self.stop_questions = True
+                    #return so data can be saved in ema_storing_data if needed
+                    #btw conneciton errors are always stored in reward_data from call_ema()
+                    if empath_return == True:
+                        return None, None
+                    return None
             
             #if this is the recommender request button just return the answer
             if request_button == True:
@@ -1374,6 +1381,10 @@ class Recommender:
             likert_answer = self.call_poll_ema(message, speaker_id=speaker_id, all_answers=True,
                                                acoust_evt=True, ifmissed='missed:recomm:1', seq_key=sequence_key)  # 0 -1.0 or any number on scale
 
+            if likert_answer == None:
+                likert_answer = -1 #make reward -1 if connection error or no answer
+
+            #updated even if connection error to even out the rest of the day
             self.update_messages_sent(reactive)
 
             #record messages that are sent during baseline period. Whether randomly randomly triggered or request button or acoustic triggered
