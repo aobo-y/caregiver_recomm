@@ -85,8 +85,18 @@ class RemoteLocalBlender:
                 self.remote_status = True
 
         except (ConnectionRefusedError, http.client.CannotSendRequest):
+            log('Server connection refused/http error')
             if self.remote_status:
                 log('Lost remote server connection, switch to local service')
+                self.remote_status = False
+        except Exception as e:
+            if 'WinError' in str(e):
+                log('Server Connection Error:', str(e))
+            else:
+                log('Server error:', str(e))
+
+            if self.remote_status:
+                log('Lost remote server connection because of variant error, switch to local service')
                 self.remote_status = False
 
         # except xmlrpc.client.Fault as err:
@@ -536,8 +546,8 @@ class Recommender:
 
         except Exception as err:
             log('Event processing error:', str(err))
-            self.email_alerts('Recommendation Messages', str(err), 'Failure in send_action or get_reward functions',
-                              'Possible sources of error: connection, storing/reading data in EMA tables, reading json file, overlap issue',
+            self.email_alerts('Recommendation Messages or Server Down', str(err), 'Failure in RemoteLocalBlender, send_action function, or get_reward function',
+                              'Possible sources of error: Check if AWS EC2 Server Down, storing/reading data in EMA tables, reading json file, overlap issue',
                               urgent=False)
         finally:
             self.stop_questions = False  # reset

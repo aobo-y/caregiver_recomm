@@ -6,7 +6,7 @@ import numpy as np
 from pkg.alg import MultiLinUCB
 from pkg.cloud import pull_cloud_data
 
-PORT = 8000
+PORT = 8989
 
 ctx_size = 6
 n_choices = 22
@@ -85,11 +85,15 @@ def import_data():
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument('--port', '-p', type=int, default=8989)
+  parser.add_argument('--port', '-p', type=int, default=PORT)
   args = parser.parse_args()
 
-  port = args.port if args.port else PORT
-
+  #port = args.port if args.port else 8000
+  if args.port:
+    port = args.port 
+  else:
+    raise Exception('Port', PORT, 'not available. Stop all other processes and try again.')
+    
   server = SimpleXMLRPCServer(('0.0.0.0', port), allow_none=True)
 
   #Register functions on Server

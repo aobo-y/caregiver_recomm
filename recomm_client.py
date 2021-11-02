@@ -8,7 +8,7 @@ import numpy as np
 import xmlrpc.client
 
 #Make true if you would like to make permanent change to server-side model
-MAKE_CHANGE = False
+MAKE_CHANGE = True
 
 def _remote(callback):
     res = None
@@ -17,6 +17,10 @@ def _remote(callback):
 
     except (ConnectionRefusedError, http.client.CannotSendRequest):
         print('Lost remote server connection, switch to local service')
+    except Exception as e:
+        if 'WinError' in str(e):
+            print('Server Connection Error. Lost remote server connection, switch to local service:', str(e))
+        raise
 
     return res
 
@@ -34,13 +38,13 @@ proxy = xmlrpc.client.ServerProxy(server_config['url'], allow_none=True)
 if __name__ == "__main__":
 
     #Test act and update function on server-side --------------------------------------
-    stats = [0]*22 #Number of actions (choices)
-    ctx = np.concatenate([np.array([0,0,0,0,0,0]),np.array(stats)])
-    action, UCBS = act(0,ctx.tolist(), True, None)
-    print('Action:',action)
-    print('UCBS:',ctx)
+    # stats = [0]*22 #Number of actions (choices)
+    # ctx = np.concatenate([np.array([0,0,0,0,0,0]),np.array(stats)])
+    # action, UCBS = act(0,ctx.tolist(), True, None)
+    # print('Action:',action)
+    # print('UCBS:',ctx)
 
-    proxy.update(0, ctx.tolist(),2,1)
+    #proxy.update(0, ctx.tolist(),2,1)
 
     if MAKE_CHANGE:
         answer = input('Are you sure you want to make permanent a change to the server-side model?[Y/N] ')
