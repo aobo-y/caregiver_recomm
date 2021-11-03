@@ -8,7 +8,7 @@ import numpy as np
 import xmlrpc.client
 
 #Make true if you would like to make permanent change to server-side model
-MAKE_CHANGE = True
+MAKE_CHANGE = False
 
 def _remote(callback):
     res = None
@@ -38,11 +38,11 @@ proxy = xmlrpc.client.ServerProxy(server_config['url'], allow_none=True)
 if __name__ == "__main__":
 
     #Test act and update function on server-side --------------------------------------
-    # stats = [0]*22 #Number of actions (choices)
-    # ctx = np.concatenate([np.array([0,0,0,0,0,0]),np.array(stats)])
-    # action, UCBS = act(0,ctx.tolist(), True, None)
-    # print('Action:',action)
-    # print('UCBS:',ctx)
+    stats = [0]*22 #Number of actions (choices)
+    ctx = np.concatenate([np.array([0,0,0,0,0,0]),np.array(stats)])
+    action, UCBS = act(0,ctx.tolist(), True, None)
+    print('Action:',action)
+    print('UCBS:',ctx)
 
     #proxy.update(0, ctx.tolist(),2,1)
 
