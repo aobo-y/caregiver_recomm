@@ -358,3 +358,107 @@
 [RECOMM] 2021-09-07 05:21:49     Currently in baseline deployment, sending baseline recommendation messages
 [RECOMM] 2021-09-07 05:22:01     Recorded event in the ema_storing_data table
 [RECOMM] 2021-09-07 05:22:01     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:12:22     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-12-01 03:12:22     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-12-01 03:12:22     Client ID: 0
+[RECOMM] 2021-12-01 03:12:22     This deployment is a restart, baseline period updated to previous: 16 days, 19:37:09
+[RECOMM] 2021-12-01 03:12:22     recomm_saved_memory table updated. Baseline period remaining: 1453029 seconds
+[RECOMM] 2021-12-01 03:12:22     InformationDeployment.db time read successfully
+[RECOMM] 2021-12-01 03:12:22     Scheduled Events Initialized
+[RECOMM] 2021-12-01 03:12:22     Next random baseline recommendation in 279 minutes
+[RECOMM] 2021-12-01 03:12:22     Sleep till next schedule event: 2021-12-01 22:30:00
+[RECOMM] 2021-12-01 03:12:27     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:12:27     recommender receives event: [-0.45759576 -0.98343876  1.01229308  0.87549021 -0.69063243  0.69550792]
+[RECOMM] 2021-12-01 03:12:27     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:12:27     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:12:32     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-12-01 03:12:46     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:12:46     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:12:51     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:12:51     recommender receives event: [ 0.24702326 -1.21126082  0.66151543 -2.07225875  1.48866425  1.81749297]
+[RECOMM] 2021-12-01 03:12:51     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:12:51     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:13:49     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:13:49     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:13:54     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:13:54     recommender receives event: [-0.66708079 -0.87768853  1.06737424 -0.66746501  1.60576087  1.11841604]
+[RECOMM] 2021-12-01 03:13:54     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:13:54     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:17:30     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:17:30     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:17:50     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:17:50     recommender receives event: [-1.22396897  0.81864263 -2.01645609  0.15932303 -0.15952289 -2.71876303]
+[RECOMM] 2021-12-01 03:17:50     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:17:50     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:18:05     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:18:06     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:18:11     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:18:11     recommender receives event: [ 0.92330818  2.53389431 -0.60824578 -0.34924309  1.01340307 -1.29568477]
+[RECOMM] 2021-12-01 03:18:11     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:18:11     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:18:19     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:18:19     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:18:34     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:18:34     recommender receives event: [ 1.14928524  0.72128381  1.60192899  1.32037543 -0.94579521 -1.3300153 ]
+[RECOMM] 2021-12-01 03:18:34     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:18:34     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:39:25     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-12-01 03:39:25     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-12-01 03:39:25     Client ID: 0
+[RECOMM] 2021-12-01 03:39:25     This deployment is a restart, baseline period updated to previous: 16 days, 19:37:09
+[RECOMM] 2021-12-01 03:39:25     recomm_saved_memory table updated. Baseline period remaining: 1453029 seconds
+[RECOMM] 2021-12-01 03:39:25     InformationDeployment.db time read successfully
+[RECOMM] 2021-12-01 03:39:25     Scheduled Events Initialized
+[RECOMM] 2021-12-01 03:39:25     Next random baseline recommendation in 271 minutes
+[RECOMM] 2021-12-01 03:39:25     Sleep till next schedule event: 2021-12-01 22:30:00
+[RECOMM] 2021-12-01 03:39:30     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:39:30     recommender receives event: [ 1.03746692  0.95719376 -1.92680503  0.53719112 -0.40290796  0.29587066]
+[RECOMM] 2021-12-01 03:39:30     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:39:30     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:39:35     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-12-01 03:39:53     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:39:53     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:39:58     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:39:58     recommender receives event: [-0.92769699  0.85707724 -0.23530014 -0.27617542  0.57587599  0.30620415]
+[RECOMM] 2021-12-01 03:39:58     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:39:58     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:40:08     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:40:08     recommender receives event: [-0.12446168  1.20386332  1.24543382 -0.93357066  0.06838379  2.04595057]
+[RECOMM] 2021-12-01 03:40:08     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:40:08     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:40:18     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:40:18     recommender receives event: [ 0.32521739 -0.54411545  0.63249319 -0.18957719  0.03552045  0.51485638]
+[RECOMM] 2021-12-01 03:40:18     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:40:18     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:40:28     angry event detected from acoustic system...
+[RECOMM] 2021-12-01 03:40:28     recommender receives event: [-0.34061811  0.77339431 -2.33641847  2.31636394  1.10928253  1.52553582]
+[RECOMM] 2021-12-01 03:40:28     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:40:28     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:45:15     -- -- -- -- -- -- Recommender System Start -- -- -- -- -- --
+[RECOMM] 2021-12-01 03:45:15     Remote server: http://ec2-18-224-96-175.us-east-2.compute.amazonaws.com:8989
+[RECOMM] 2021-12-01 03:45:15     Client ID: 0
+[RECOMM] 2021-12-01 03:45:15     This deployment is a restart, baseline period updated to previous: 16 days, 19:37:09
+[RECOMM] 2021-12-01 03:45:15     recomm_saved_memory table updated. Baseline period remaining: 1453029 seconds
+[RECOMM] 2021-12-01 03:45:15     InformationDeployment.db time read successfully
+[RECOMM] 2021-12-01 03:45:15     Scheduled Events Initialized
+[RECOMM] 2021-12-01 03:45:15     Next random baseline recommendation in 153 minutes
+[RECOMM] 2021-12-01 03:45:15     Sleep till next schedule event: 2021-12-01 22:30:00
+[RECOMM] 2021-12-01 03:45:20     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:45:20     recommender receives event: [-0.5258417  -1.12377613  0.06164724  2.02688967 -1.59762307  0.67770822]
+[RECOMM] 2021-12-01 03:45:20     Reactive trigger accepted
+[RECOMM] 2021-12-01 03:45:20     Currently in baseline deployment, sending baseline recommendation messages
+[RECOMM] 2021-12-01 03:45:25     Sleep for: 30 minutes before checking if request button should be placed on screen
+[RECOMM] 2021-12-01 03:45:41     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:45:42     Baseline Recommendation Messages Sent
+[RECOMM] 2021-12-01 03:45:47     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:45:47     recommender receives event: [-0.25596485  0.19303318  1.10401234 -0.83753755 -0.62932386  3.00146196]
+[RECOMM] 2021-12-01 03:45:47     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:45:47     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:45:52     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:45:52     recommender receives event: [-0.07500393 -0.44009061  1.07280755 -1.49877696 -0.68678887  0.59092074]
+[RECOMM] 2021-12-01 03:45:52     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:45:52     Recorded event in the ema_storing_data table
+[RECOMM] 2021-12-01 03:45:57     conflict event detected from acoustic system...
+[RECOMM] 2021-12-01 03:45:57     recommender receives event: [ 0.38850494 -0.23311336  0.86989345  0.17949365 -0.83325402  0.72610731]
+[RECOMM] 2021-12-01 03:45:57     Reactive Trigger. Recommender in cooldown period. Reactive event rejected
+[RECOMM] 2021-12-01 03:45:57     Recorded event in the ema_storing_data table
