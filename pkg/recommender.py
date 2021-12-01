@@ -211,8 +211,8 @@ class Recommender:
         # get start time from Informationdeployment.db
         if not self.test_mode:
             self.timer.sleep(180) #wait for db to update
-            self.extract_deploy_info()
-                                      
+            self.extract_deploy_info()    
+
         if (not test) or (schedule_evt_test_config != None):
             # initialize _schedule_evt()
             schedule_thread = Thread(target=self._schedule_evt)
@@ -281,7 +281,7 @@ class Recommender:
 
                             log('Request button triggered recommendation')
                             #reactive. Will not actually be sent if it doesnt satisfy normal requirements such as cool down (EXCEPT MAX MESSAGES requirement)
-                            self.dispatch(DEFAULT_SPEAKERID, evt, reactive=1,requestButton=True, trigger=TRIGGERS_DICT[1])
+                            self.dispatch(DEFAULT_SPEAKERID, evt, reactive=1,requestButton=True, trigger=TRIGGERS_DICT[1], internal=1)
             except Exception as err:
                 log('start_recomm_button() error', str(err))
                 self.email_alerts('Recommendation request button', str(err), 'Failure in start_recomm_button function',
@@ -293,16 +293,49 @@ class Recommender:
                 log(f'Sleep for: {seconds_to_sleep//60} minutes before checking if request button should be placed on screen')
             #after you send it, wait X min to check if you can put the button back on
             time.sleep(seconds_to_sleep) 
+    
 
-    def dispatch(self, speaker_id, evt, reactive=1,requestButton=False, trigger=TRIGGERS_DICT[0]):
+
+    def dispatch(self, speaker_id, evt, reactive=1,requestButton=False, trigger=TRIGGERS_DICT[0], internal=0):
         '''
             reactive: 1, if triggered by acoustic system (reactive)
             reactive: 0, if proactive recommendations
 
             trigger (origin of dispatch): acoustic, recomm request button, baseline random, proactive model, random
                 default is acoustic system
+
+            internal: (1) any trigger type event from recommender system, (0) any trigger type event from external system
         '''
         global GROUPS_QUEUE, SAVED_KEYS, KEY_POINTER
+
+        #Filter events only angry, conflict or internal events
+        try:
+            #Part 1, check if parameters are valid ------------
+            if not isinstance(evt, np.ndarray):
+                evt = np.array(evt)
+
+            #filter only if external
+            if (internal == 0):
+                #Event vector is HANSO C
+                angry = evt[1]
+                conflict = evt[5]
+
+                if (angry > .5):
+                    log('angry event detected from acoustic system...')
+                elif (conflict > .5):
+                    log('conflict event detected from acoustic system...')
+                else:
+                    # not angry or conflict, just filter out 
+                    return
+            else:
+                log('internal event detected...')
+
+        except Exception as err:
+            log('Event vector error in dispatch function:', str(err))
+            self.email_alerts('Event Vector Error', str(err), 'Event vector passed in is invalid (FATAL)',
+                              'Make sure that the acoustic system is passing in valid event vectors',
+                              urgent=True)
+            return      
 
         log('recommender receives event:', str(evt))
 
@@ -310,10 +343,6 @@ class Recommender:
         if not self.sched_initialized:
             log('Scheduled events not yet initialized')
             return
-
-        #Part 1, check if parameters are valid ------------
-        if not isinstance(evt, np.ndarray):
-            evt = np.array(evt)
 
         # safety in case of numpy array or float or str
         if type(speaker_id) is not int:
@@ -381,7 +410,13 @@ class Recommender:
                 log(f'Reactive Trigger. Reactive messages sent today {REACTIVE_MESSAGES_SENT_TODAY} >= max reactive messages {MAX_REACTIVE_MESSAGES}. Reactive event rejected')
                 self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
                 return
-            #be lenient with cooldown. Allow to break cooldown period since either it is a cooldown for lower priority or current state is -1
+            # if there have been previous recommendation sent, make sure not in cooldown period
+            if len(GROUPS_QUEUE) > 1: #must check if previous was lower priorty. No cooldown for lower priority
+                # if -1, means previous event is over. Make sure the cooldown is also over and the previous is equal or higher priority. 
+                if (GROUPS_QUEUE[0] == -1) and (GROUPS_QUEUE[1] >= 1) and (not self.cooldown_ready()):
+                    log(f'Reactive Trigger. Recommender in cooldown period. Reactive event rejected')
+                    self.record_rejected_event(speaker_id,evt,reactive,trigger) #upload event to ema_storing_data table
+                    return
             log('Reactive trigger accepted')
         
         #Part 4, deal with previous sequences and prepare for new sequence ---- 
@@ -1526,7 +1561,7 @@ class Recommender:
                 #only send if in correct period (might be rejected)
                 if self.recomm_start:
                     log('Sending baseline random recommendation')
-                    self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=TRIGGERS_DICT[2]) #this is proactive
+                    self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=TRIGGERS_DICT[2], internal=1) #this is proactive
                     #button handeled once you call dispatch
 
             except Exception as err:
@@ -1645,7 +1680,7 @@ class Recommender:
                         log('Sending proactive recommendation')
                         evt = np.zeros(D_EVT, dtype=int)
                         #not reactive. proactive
-                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=current_trigger) 
+                        self.dispatch(DEFAULT_SPEAKERID, evt, reactive=0, trigger=current_trigger, internal=1) 
                         #button handled once you call dispatch
                         
                 send_proactive_answer = False #reset

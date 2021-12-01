@@ -13,11 +13,11 @@ def main(server_config=None, mock=False, mode='default'):
     recommender = Recommender(evt_dim=D_EVT)
 
     while True:
-        time.sleep(35)
+        time.sleep(5)
         evt = np.random.randn(D_EVT)
         #evt = np.zeros(D_EVT, dtype=int)
         recommender.dispatch(1, evt)
-        time.sleep(15)
+        # time.sleep(15)
     
 
 
