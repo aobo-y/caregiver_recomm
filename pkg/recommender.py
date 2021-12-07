@@ -308,37 +308,8 @@ class Recommender:
         '''
         global GROUPS_QUEUE, SAVED_KEYS, KEY_POINTER
 
-        #Filter events only angry, conflict or internal events
-        try:
-            #Part 1, check if parameters are valid ------------
-            if not isinstance(evt, np.ndarray):
-                evt = np.array(evt)
 
-            #filter only if external
-            if (internal == 0):
-                #Event vector is HANSO C
-                angry = evt[1]
-                conflict = evt[5]
-
-                if (angry > .5):
-                    log('angry event detected from acoustic system...')
-                elif (conflict > .5):
-                    log('conflict event detected from acoustic system...')
-                else:
-                    # not angry or conflict, just filter out 
-                    return
-            else:
-                log('internal event detected...')
-
-        except Exception as err:
-            log('Event vector error in dispatch function:', str(err))
-            self.email_alerts('Event Vector Error', str(err), 'Event vector passed in is invalid (FATAL)',
-                              'Make sure that the acoustic system is passing in valid event vectors',
-                              urgent=True)
-            return      
-
-        log('recommender receives event:', str(evt))
-
+        # ----- Sanity Checks for Safety of Recomm System -----------------------------------
         # system must be initialized
         if not self.sched_initialized:
             log('Scheduled events not yet initialized')
@@ -361,6 +332,40 @@ class Recommender:
                               'Make sure acoustic system passes correct speaker id type: positive int',
                               urgent=True)
             return
+
+        #Filter events only angry, conflict or internal events
+        try:
+            #Part 1, check if parameters are valid ------------
+            if not isinstance(evt, np.ndarray):
+                evt = np.array(evt)
+
+            #filter only if external
+            if (internal == 0):
+                #Event vector is HANSO C
+                angry = evt[1]
+                conflict = evt[5]
+
+                if (angry > .5):
+                    log('angry event detected from acoustic system...')
+                elif (conflict > .5):
+                    log('conflict event detected from acoustic system...')
+                else:
+                    log('event below threshold. event filtered.')
+                    # #upload event to ema_storing_data table. this could happen every 5 seconds
+                    self.record_rejected_event(speaker_id,evt,reactive,trigger+' filtered') 
+                    # not angry or conflict, just filter out 
+                    return
+            else:
+                log('internal event detected...')
+
+        except Exception as err:
+            log('Event vector error in dispatch function:', str(err))
+            self.email_alerts('Event Vector Error', str(err), 'Event vector passed in is invalid (FATAL)',
+                              'Make sure that the acoustic system is passing in valid event vectors',
+                              urgent=True)
+            return      
+
+        log('recommender receives event:', str(evt))
 
         #Part 2, check if event can be sent or must balk ------
         # acoustic events only sent during time interval or not during current scheduled events no matter the priority
