@@ -347,7 +347,7 @@ class Recommender:
 
                 if (angry > .5):
                     log('angry event detected from acoustic system...')
-                elif (conflict > .5):
+                elif (conflict > .525):
                     log('conflict event detected from acoustic system...')
                 else:
                     log('event below threshold. event filtered.')
