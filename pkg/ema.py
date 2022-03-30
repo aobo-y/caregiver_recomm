@@ -337,6 +337,10 @@ def setup_message(message_name, test=False, caregiver_name='caregiver', care_rec
             #add image to message
             message = message + html_newline*2 + cntr + '<img src="' + image_url + '" style="'+image_style+'">' + end_cntr
 
+    #Enjoyable activities
+    if "[Load Dynamic Activities]" in message:
+        message = load_choose_dynamic_enjoyable_activity(message)
+
     #Check if must add Audio addon sequence -------------
     if ('[AudioAddon: breathing]' in message) or ('[AudioAddon: bodyscan]' in message):
 
@@ -525,3 +529,29 @@ def likert_dynamic_answers(msg,suid):
         db.close()
         return message
 
+def load_choose_dynamic_enjoyable_activity(msg):
+    '''Read the enjoyable_activities.txt file and randomly choose an enjoyable activity
+    
+        Assuming the first line of the file is the header file and is not an enjoyable activity
+    '''
+    #Default if no activity is loaded
+    message = 'grab your activity box' 
+    try:
+        with open('enjoyable_activities.txt') as file:
+            #Read all non empty lines
+            activities_lst = [line.strip() for line in file if line.strip()]
+
+        if len(activities_lst) > 1:
+            #Start at index 1 to not include the header of the file
+            random_activity = random.randint(1,len(activities_lst)-1)
+
+            message = msg.replace('[Load Dynamic Activities]',activities_lst[random_activity])
+        else:
+            message = msg.replace('[Load Dynamic Activities]',message)
+            log('Dynamic Enjoyable Activities Text File is Empty. Using default activity.')
+
+    except Exception as e:
+        log('Failed to load dynamic enjoyable activities. Using "Grab your activity box" instead',str(e))
+    
+    return message
+    

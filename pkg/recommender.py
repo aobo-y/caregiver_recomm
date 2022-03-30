@@ -24,7 +24,7 @@ ACTIONS = ['timeout:1', 'timeout:2', 'timeout:3', 'timeout:4', 'timeout:5', 'tim
            'breathing:1', 'breathing:2', 'breathing:3', 
            'bodyscan:1', 'bodyscan:2',
            'enjoyable:1', 'enjoyable:2', 'enjoyable:3', 'enjoyable:4', 'enjoyable:5',
-           'enjoyable:6', 'enjoyable:7', 'enjoyable:8']
+           'enjoyable:6', 'enjoyable:7', 'enjoyable:8', 'enjoyable:9']
 
 #lst of indices allowed for proactive actions
 PROACTIVE_ACTION_INDEX = [n for n,i in enumerate(ACTIONS) if ('breathing' in i) or ('bodyscan' in i)]
@@ -203,6 +203,9 @@ class Recommender:
         #recommendation request button
         self.request_recomm_button = True #if button thread should be activated
         self.need_button_on = True #true whenever the button should be displayed
+
+        #allow messages to be sent after evening messages until midnight (only set to true manually for some specific deployments)
+        self.allow_after_hours_messages = False
 
         # Default start and end time
         self.time_morn_delt = timedelta(hours=10, minutes=1)
@@ -1155,12 +1158,15 @@ class Recommender:
                     self.recomm_start = True  # recomm can now be sent
                     DAILY_RECOMM_DICT = {}  # reset
 
-                    #save the baseline period left
+                    #save the baseline period left and recomm_start state in recomm_saved_memory
                     self.savedDeployments(update_baseline_period=True)
 
                     self.need_button_on = True #need the button on next time it checks
 
                 elif event_id == 'evening message':
+                    #if allow_after_hours is true, then wait until midnight before turning system off for the night
+                    self.after_hours_messages() 
+
                     #resets
                     self.recomm_start = False  # backup incase error
                     self.stop_questions = False #reset incase error
@@ -1168,7 +1174,7 @@ class Recommender:
                     self.reset_messages_sent()  # reset amount of recommendation messages to 0
                     self.num_sent_affirmation_msgs = 0 #reset number of  affirmation msgs sent today to 0
                     EXTRA_ENCRGMNT = ''
-                    #save the baseline period left
+                    #save the baseline period left and recomm_start state in recomm_saved_memory
                     self.savedDeployments(update_baseline_period=True)
                     # send the scheduled email
                     self.email_alerts(scheduled_alert=True)
@@ -1182,11 +1188,42 @@ class Recommender:
                         log('Successfully updated proactive model after evening messages')
                     except Exception as err:
                         log('Unable to update proactive model in proactive_recomm()',str(err))
-
+                    
             evt_count += 1
             if self.test_mode and evt_count >= self.test_week_repeat * len(schedule_evts):
                 return
 
+    def after_hours_messages(self):
+        '''If this deployment allows after hours messages, then keep the system active until midnight by sleeping till midnight
+            By sleeping till midnight, the scheduled events thread will not stop the recommender system until midnight
+        
+            Most deployments will not use this feature
+            allow_after_hours_messages: type -> bool
+                Only True if the caregiver has expressed they would like to recieve messages after the evening messages
+        '''
+        try:
+            if self.allow_after_hours_messages:
+                self.recomm_start = True 
+                self.stop_questions = False #reset incase error
+                self.need_button_on = True #keep button active
+
+                current_time = self.timer.now()
+                current_time = timedelta(hours=current_time.hour,minutes=current_time.minute)
+                midnight = timedelta(hours=23, minutes=59)
+
+                #sleep untill midnight to stop event scheduling thread from turning system off for the night
+                if (current_time < midnight) and (current_time > self.time_morn_delt):
+                    time_till_midnight = (midnight - current_time).total_seconds()
+                    log('Allowing after hours messages to be sent until midnight')
+                    time.sleep(time_till_midnight)
+                    log('Ending after hours messages')
+
+        except Exception as e:
+            log('Failure in the after_hours_messages() function',str(e))
+            self.email_alerts('after_hours_messages error', str(e),'Failure in the after_hours_messages() function',
+                                      'Make sure evening time is less than midnight',
+                                      urgent=False)
+    
     def call_poll_ema(self, msg, msg_answers=[], speaker_id='9', all_answers=False, empath_return=False, remind_amt=3,
                       acoust_evt=False, phonealarm='false',poll_time=300,ifmissed='missed:recomm:1',reactive_recomm=0, poll_freq=0,request_button=False, seq_key=None):
 
@@ -1830,7 +1867,7 @@ class Recommender:
 
             self.home_id = h_id
 
-            #check if this is a restart deployment, update baseline time
+            #check if this is a restart deployment, update baseline time, save recomm_start state
             self.savedDeployments(check_for_prev=True)
 
             log('InformationDeployment.db time read successfully')
@@ -1861,6 +1898,13 @@ class Recommender:
             baseline periodleft is stored in seconds, if baseline period was over, 0 is stored
             save start/end time
             save max messages
+            save the state of the system
+                recomm_start: type -> bool 
+                When True (1) recommendations  and messages can be sent. 
+                When False (0) recommendations and messages cannot be sent.
+                recomm_start is converted to an int (1/0) when uploaded to table
+
+            This function is called in the morning, evening, and the start of a deployment
         """
         global BASELINE_TIME, MAX_MESSAGES
 
@@ -1908,6 +1952,13 @@ class Recommender:
                     MAX_MESSAGES = int(prev_maxMessages)
                     self.reload_max_messages(MAX_MESSAGES)
 
+                    #Check what part of the day we are starting at
+                    current_time = timedelta(hours=self.timer.now().hour, minutes=self.timer.now().minute)
+                    if (current_time > self.time_morn_delt) and (current_time < self.time_ev_delt):
+                        self.recomm_start = True  # system initialized during acceptable interval
+                    else:
+                        self.recomm_start = False  # if new time entered in future
+
                     log(f'This deployment is a restart, baseline period updated to previous: {self.baseline_period}')
                 else:
                     log(f'This is a new deployment, baseline period: {self.baseline_period}')
@@ -1945,13 +1996,13 @@ class Recommender:
                 cursor = db.cursor()
 
                 #insert to the first row of the table!! (assuming always only one row)
-                update_query = "UPDATE recomm_saved_memory SET deploymentID = %s, baselineTimeLeft = %s, lastUpdated = %s, morningStartTime = %s, eveningEndTime = %s, maxMessages = %s LIMIT 1"
+                update_query = "UPDATE recomm_saved_memory SET deploymentID = %s, baselineTimeLeft = %s, lastUpdated = %s, morningStartTime = %s, eveningEndTime = %s, maxMessages = %s, recomm_start = %s LIMIT 1"
 
                 # change time to date time format
                 update_time = str(datetime.fromtimestamp(int(time.time())))
 
                 # no matter what just update the table with new deployment information or the remaining baseline time (baseline time is the period in seconds)
-                cursor.execute(update_query,(str(self.home_id),str(baseline_time_left),update_time,str(self.time_morn_delt),str(self.time_ev_delt),MAX_MESSAGES))
+                cursor.execute(update_query,(str(self.home_id),str(baseline_time_left),update_time,str(self.time_morn_delt),str(self.time_ev_delt),MAX_MESSAGES, int(self.recomm_start)))
                 db.commit()
 
                 log(f'recomm_saved_memory table updated. Baseline period remaining: {baseline_time_left} seconds')
@@ -1959,7 +2010,7 @@ class Recommender:
             except Exception as err:
                 log('savedDeployments Error', str(err))
                 self.email_alerts('recomm_saved_memory table', str(err), 'Failure in savedDeployment function, update query',
-                                  'Possible sources of error: no row exists, format issue, baseline_time_left',
+                                  'Possible sources of error: no row exists, format issue, baseline_time_left, recomm_start unable to be uploaded to table',
                                   urgent=True)
                 db.rollback()
             finally:
