@@ -9,11 +9,12 @@ import seaborn as sn
 import matplotlib.pyplot as plt
 import numpy as np
 import pymysql
+import random
 from .log import log
 from datetime import datetime, timedelta
 
 def get_conn():
-    return pymysql.connect('localhost', 'root', '', 'ema')
+    return pymysql.connect(host='localhost', user='root', password='', db='ema')
 
 def read_data():
     '''
@@ -175,7 +176,8 @@ def get_proactive_prediction(hour,model):
 
         #initilaize polynomial regression for transforming hour
         poly_reg = PolynomialFeatures(degree=4)
-       
+
+        log('Proactive model predicting...')
         #pass hour to model
         Y_pred = model.predict(poly_reg.fit_transform([[hour]]))
 

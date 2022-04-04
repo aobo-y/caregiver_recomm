@@ -11,9 +11,9 @@ class MultiLinUCB(LinUCB):
 
     self.lin_ucb = super().__init__(ctx_size , n_choices, lambda_=lambda_, alpha=alpha)
 
-    lambda_1 = 0.1
-    lambda_2 = 0.1
-    self.sqrt_u = math.sqrt(n_tasks * lambda_1 / lambda_2)
+    self.lambda_1 = 0.1
+    self.lambda_2 = 0.1
+    self.sqrt_u = math.sqrt(n_tasks * self.lambda_1 / self.lambda_2)
 
   def cvt_ctx(self, task, ctx):
     ''' convert ctx vector of multi tasks scenario to normal LinUCB ctx '''
@@ -26,15 +26,25 @@ class MultiLinUCB(LinUCB):
       else:
         new_ctx = np.concatenate([new_ctx, np.zeros(self.raw_ctx_size)])
 
-
     return new_ctx
 
-  def act(self, task, ctx, **kargs):
+  def act(self, task, ctx, return_ucbs=False, subset=None):
     new_ctx = self.cvt_ctx(task, ctx)
-    choice = super().act(new_ctx, **kargs)
+    choice = super().act(new_ctx, return_ucbs=return_ucbs, subset=subset)
     return choice
 
   def update(self, task, ctx, choice, reward):
     new_ctx = self.cvt_ctx(task, ctx)
 
     super().update(new_ctx, choice, reward)
+  
+  def add_feature(self, feature_is_choice):
+    super().add_feature(self.raw_ctx_size,self.n_tasks,feature_is_choice)
+    #add feature to raw ctx size
+    self.raw_ctx_size+=1
+
+  def add_task(self):
+    super().add_task(self.raw_ctx_size, self.n_tasks)
+    self.n_tasks+=1
+    #recompute
+    self.sqrt_u = math.sqrt(self.n_tasks * self.lambda_1 / self.lambda_2)
