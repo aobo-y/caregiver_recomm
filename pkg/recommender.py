@@ -13,7 +13,7 @@ from .alg import LinUCB
 from .scenario import Scenario
 from .stats import Stats
 from .log import log
-from .ema import call_ema, poll_ema, get_conn, setup_message, connectionError_ema, get_stop_polling, set_stop_polling
+from .ema import call_ema, poll_ema, get_conn, setup_message, connectionError_ema, get_stop_polling, set_stop_polling, add_event_time_in_msg
 from .time import Time
 from .proactive_model import generate_proactive_models, get_proactive_prediction
 from sendemail import sendemail as se  # change to actual path
@@ -1262,11 +1262,11 @@ class Recommender:
         answer = None
         refresh_poll_time = poll_time
         missed_msg_sent = 0 #only send missed msg once if never answered (default), send another time if second chance also no answer
-
+        event_passed_time = 0
 
         # send message 'remind_amt' times if there is no answer
         while send_count < remind_amt:
-           
+
             # dont continue acoust if scheduled evt
             if acoust_evt and (not self.recomm_start) and empath_return:
                 return None, None
@@ -1281,13 +1281,27 @@ class Recommender:
                     return None
 
             try:
+                # add event time in message content. if not need to add time, return value is same as input message_sent
+                stored_msg_sent_with_event_time = add_event_time_in_msg(
+                    message_sent=setup_lst[3],
+                    message_name=setup_lst[4],
+                    event_time=event_passed_time
+                )
+                setup_lst[4] = stored_msg_sent_with_event_time
+
                 # returns empathid, the polling object (for different types of questions from ema_data), and question type
-                req_id, retrieval_object, qtype = call_ema(speaker_id, test=self.test_mode, already_setup=setup_lst, alarm=phonealarm,reactive=reactive_recomm, snd_cnt=send_count+1)
+                req_id, retrieval_object, qtype = call_ema(
+                    speaker_id, test=self.test_mode, already_setup=setup_lst, alarm=phonealarm,
+                    reactive=reactive_recomm, snd_cnt=send_count+1
+                )
                 
                 #poll
                 answer = poll_ema(speaker_id, req_id, -1, retrieval_object, qtype,
                                   duration=(refresh_poll_time if not self.test_mode else 0.1),
                                   freq=(poll_freq if not self.test_mode else 0.02), test_mode=self.test_mode)
+
+                # update event pass time as the duration of the poll_ema()
+                event_passed_time += (refresh_poll_time if not self.test_mode else 0.1)
             
             except Exception as e:
                 log('Call_ema or Poll_ema Error', str(e))
@@ -1296,6 +1310,8 @@ class Recommender:
                     exception_count+=1
                     #if connection error try again after 10 min
                     time.sleep(600) #10 min
+                    # update event pass time as this sleep and wait time
+                    event_passed_time += 600
                     pass
                 else:
                     self.email_alerts('call_ema or poll_ema error', str(e),'Failure in call_ema or poll_ema functions',
@@ -1340,7 +1356,7 @@ class Recommender:
             elif send_count == 2:
                 refresh_poll_time = 1200  # 20min
             
-       
+
             #once sent x times and still no answer and msd msg has not been sent before, send missed message
             if (send_count == remind_amt) and (missed_msg_sent < 2):
 
